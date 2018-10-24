@@ -13,6 +13,11 @@ from appmanager import AppManager
 from actools import adapter, cfgutil
 import tethering
 
+try:
+    from management_tools import slack
+except ImportError:
+    slack = None
+
 '''Collection of tools for managing and automating iOS devices
 '''
 
@@ -27,6 +32,7 @@ __description__ = ('Collection of tools for managing and automating '
 __all__ = [
     'DeviceManager', 
     'StoppedError',
+    'Slackbot'
 ]
 
 ## CHANGELOG:
@@ -80,10 +86,12 @@ __all__ = [
 #   - Moved Slackbot to __init__.py
 #   - changed query()
 #   - removed lockcheck from need_to_erase
-
+# 2.1.7:
+#   - Moved Slackbot back to devicemanager (couldn't import)
 
 ## BUGS:
 # - new devices are causing the manager to exit (fixed in 2.1.4)
+
 
 class Error(Exception):
     pass
@@ -98,6 +106,37 @@ class StoppedError(Error):
 
     def __str__(self):
         return "STOPPED: " + str(self.message)
+
+
+class Slackbot(object):
+    '''Null Wrapper for management_tools.slack
+    '''
+    def __init__(self, info, logger=None):
+        if not logger:
+            logger = logging.getLogger(__name__)
+            logger.addHandler(logging.NullHandler())
+        self.log = logger
+        try:
+            # TO-DO: name could be dynamic
+            self.name = info['name']
+            self.channel = info['channel']
+            self.url = info['url']
+            self.bot = slack.IncomingWebhooksSender(self.url, 
+                               bot_name=self.name, channel=self.channel)
+            self.log.info("slack channel: {0}".format(self.channel))
+        except AttributeError as e:
+            self.log.error("slack tools not installed")
+            self.bot = None            
+        except KeyError as e:
+            self.log.error("missing slack info: {0}".format(e))
+            self.bot = None
+    
+    def send(self, msg):
+        try:
+            self.bot.send_message(msg)
+        except AttributeError:
+            self.log.debug("slack: unable to send: {0}".format(msg))
+            pass
 
 
 class DeviceManager(object):
