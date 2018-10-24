@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Disabled</key>
+	<false/>
+	<key>LimitLoadToSessionType</key>
+	<array>
+		<string>Aqua</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>Label</key>
+	<string>edu.utah.mlib.ipad.checkout</string>
+	<key>Program</key>
+	<string>/usr/local/bin/checkout_ipads.py</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>checkout_ipads.py</string>
+		<string>daemon</string>
+	</array>
+	<key>StandardOutPath</key>
+	<string>/tmp/checkout_ipad.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/checkout_ipad.log</string>
+</dict>
+</plist>
