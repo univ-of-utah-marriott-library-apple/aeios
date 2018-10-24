@@ -76,8 +76,11 @@ __all__ = [
 #     list
 #   - incorporated changes from cfgutil 2.0.5
 #   - added better erase error detection
-# 2.1.5:
+# 2.1.6:
 #   - Moved Slackbot to __init__.py
+#   - changed query()
+#   - removed lockcheck from need_to_erase
+
 
 ## BUGS:
 # - new devices are causing the manager to exit (fixed in 2.1.4)
@@ -282,10 +285,11 @@ class DeviceManager(object):
         '''Reserved for future conditional erasing
         Returns True (for now)
         '''
-        self.task.add('lockcheck', [device.ecid])
+        # self.task.add('lockcheck', [device.ecid])
         device.delete('erased')
-        if device.locked:
-            return False
+        self.task.query('installedApps', [device.ecid])
+#         if device.locked:
+#             return False
         return True
 
     def check_network(self, devices):    
@@ -444,6 +448,7 @@ class DeviceManager(object):
                     m = 're-adding query: {0}: {1}'.format(k, ecids)
                     self.log.debug(m)
                     self.task.query(k, ecids)
+            return
 
         if check_locked:
             _locked = []
@@ -452,38 +457,30 @@ class DeviceManager(object):
                 if _info.get('cloudBackupsAreEnabled') is not None:
                     _locked.append(device.ecid)
 
-                # parse the info for the appmanager
-                app_info = _info.get('installedApps', [])
-                # each app has 4 keys: 
-                #   ['itunesName', 'displayName', bundleIdentifier, 
-                #     'bundleVersion']
-                # display name is useful only when parsing GUI
-                # we install apps with their itunesName
-                _apps = []
-                for app in app_info:
-                    name = app.get('itunesName')
-                    if name:
-                        _apps.append(name)
-                # get all new apps that were installed (if any)
-                _new = self.apps.unknown(device, _apps)
-                if _new:
-                    # only report if new apps were found
-                    smsg = "new user apps: {0}".format(_new)
-                    msg = "NEW: {0}: {1}".format(device.name, smsg)
-                    self.log.info(msg)
-                    self.slackbot.send(msg)
-                    # if the user installed apps, the device is 
-                    # probably locked
-                    if device.ecid not in _locked:
-                        _locked.append(device.ecid)
+        for device in self.findall(ecidset):
+            self.log.debug("unlocking device")
+            device.delete('locked')
+            # parse the info for the appmanager
+            app_info = info.get('installedApps', [])
+            # each app has 4 keys: 
+            #   ['itunesName', 'displayName', bundleIdentifier, 
+            #     'bundleVersion']
+            # display name is useful only when parsing GUI
+            # we install apps with their itunesName
+            _apps = []
+            for app in app_info:
+                name = app.get('itunesName')
+                if name:
+                    _apps.append(name)
+            # get all new apps that were installed (if any)
+            _new = self.apps.unknown(device, _apps)
+            if _new:
+                # only report if new apps were found
+                smsg = "new user apps: {0}".format(_new)
+                msg = "NEW: {0}: {1}".format(device.name, smsg)
+                self.log.info(msg)
+                self.slackbot.send(msg)
 
-            if _locked:
-                self.log.error("possible activation lock detected")
-                self.lockdevices(_locked)
-            else:
-                for device in self.findall(check_locked):
-                    self.log.debug("unlocking device")
-                    device.delete('locked')
             
         # TO-DO: this is dependent on how failed cfgutil.get returns
         # re-add failed queries
@@ -518,8 +515,7 @@ class DeviceManager(object):
         else:
             devices = self.available()
 
-        ecids = self.task.erase(only=[d.ecid for d in devices],
-                                exclude=[d.ecid for d in self.locked])
+        ecids = self.task.erase(only=[d.ecid for d in devices])
 
         if not ecids:
             self.log.info("no devices need to be erased")
