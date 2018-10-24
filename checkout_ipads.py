@@ -9,7 +9,7 @@ import signal
 import logging
 
 from management_tools import loggers
-from ipadmanager import DeviceManager
+from ipadmanager import DeviceManager, StoppedError
 
 '''Automate the management of iOS devices 
 '''
@@ -18,7 +18,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.0.5'
+__version__ = '2.0.6'
 __url__ = None
 __description__ = 'Automate the management of iOS devices'
 
@@ -34,6 +34,9 @@ __description__ = 'Automate the management of iOS devices'
 #  - moved adjust_logger_format()
 # 2.0.5:
 #  - fixed bug that would cause the daemon to quit if a device was erased
+# 2.0.6:
+#  - added additional exception handling in daemon()
+#  - fixed NameError with StoppedError
 
 
 class SignalTrap(object):
@@ -100,8 +103,11 @@ def daemon(logger, path):
         if not manager.stopped:
             try:
                 manager.verify()
-            except ipadmanager.StoppedError:
-                pass
+            except StoppedError:
+                logger.info("manager was stopped")
+            except Exception as e:
+                logger.error("unexpected error: {0!s}".format(e))
+                
     p.kill()
 
 def adjust_logger_format(logger, pid):
