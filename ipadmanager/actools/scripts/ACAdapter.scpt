@@ -476,44 +476,6 @@ on cancelAction(targetWindow)
 	performAction(progressSheet, {choice:"Cancel"})
 end cancelAction
 
--- TESTS
-
-on testSelectDevices()
-	local testKey, testValues
-	--set testKey to "UDID"
-	--set testValues to {"D979D7C850F0EE0DB6ED2965616991EE815004CC", "A81308B7A3A3A1C19308301502A1B3290935137F", "B49145911238557A60CBD58490A84BA2E7520748"}
-	--set testValues to {"A81308B7A3A3A1C19308301502A1B3290935137F"}
-	
-	set testKey to "ECID"
-	-- set testValues to {"D979D7C850F0EE0DB6ED2965616991EE815004CC", "A81308B7A3A3A1C19308301502A1B3290935137F", "B49145911238557A60CBD58490A84BA2E7520748"}
-	set testValues to {"0x11354C2429883A"}
-	selectDevices(testKey, testValues)
-end testSelectDevices
-
-on testVPPApps()
-	local args, wndw
-	set args to {udids:{"FBE61F791F298C66EBB00A282F5B070C6CB9DC47"}, apps:{"Microsoft PowerPoint"}}
-	set wndw to deviceWindow()
-	putWindowIntoListViewMode(wndw)
-	selectDevices("UDID", udids of args)
-	return installVPPApps(wndw, apps of args)
-end testVPPApps
-
-on testApplyBlueprint()
-	local args, wndw
-	set args to {blueprint:"Install VPP Apps", udids:{"D979D7C850F0EE0DB6ED2965616991EE815004CC"}}
-	set wndw to deviceWindow()
-	putWindowIntoListViewMode(wndw)
-	selectDevices("UDID", udids of args)
-	applyBlueprint(wndw, blueprint of args)
-end testApplyBlueprint
-
-on testListDevices()
-	local info, wndw
-	set wndw to deviceWindow()
-	set info to getDeviceInfo(wndw)
-	return convertASToJSON(devices of info)
-end testListDevices
 
 -- MAIN
 

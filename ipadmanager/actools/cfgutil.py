@@ -31,9 +31,76 @@ __description__ = 'Execute commands with `cfgutil`'
 #   - fixed bug that caused CfgutilError to overwrite Message
 
 
-class Error(Exception):
-    pass
+# global reservation of <type 'list'>
+_list = type([])
 
+class Error(Exception):
+
+    def __init__(self, err, ecids, info={}):
+        self.ecids = ecids
+        self.msg = err
+        self.command = info.get('Command','')
+        self.message = info.get('Message','')
+        self.domain = info.get('Domain','')
+        self.reason = info.get('FailureReason','')
+        self.code = info.get('Code','')
+        self.detail = info.get('Detail','')
+        self.unaffected = info.get('UnaffectedDevices', [])
+        self.affected = info.get('AffectedDevices', ecids)
+        
+    def __str__(self):
+        err = "{0}: {1}".format(self.command, self.msg)
+        if self.message:
+            err += ": {0}".format(self.message)
+        return err
+
+
+class Result(object):
+    '''
+    '''
+    def __init__(self, ecids, cfgout, _exec=[]):
+        self._info = cfgout
+        self._exec = _exec
+        self.command = cfgout.get('Command')
+        self.output = cfgout.get('Output', {})
+        _type = cfgout.get('Type')
+        self.ecids = cfgout.get('Devices', [])
+        self.missing = [x for x in ecids if x not in self.ecids]
+        # set attributes 
+        if _type == 'CommandOutput':
+            if self.command == 'get':
+                # process get output
+            else:
+                # Not sure if I like: self.erase = self.ecids
+                # setattr(self, self.command, self.ecids)
+                pass
+        elif _type == 'Error':
+            # process errors
+        else:
+            # unknown
+            pass
+
+    def succeeded(self):
+        return self.ecids
+
+    def failed(self):
+        _failed = self.missing
+        # process other types of failure
+        return _failed
+
+    def info(self, ecid, key=None):
+        '''potential to be amazingly helpful or a pain in the ass
+        '''
+        # result.info() -> all of everything?
+        # result.info(ecid) -> info for just ecid?
+        # result.info(ecids) -> info for all specified ecids?
+        # result.info(ecids, keys) -> info for specified ecids and keys
+        pass
+        
+    def get(self, ecids, keys):
+        # result.get(ecid)
+        pass
+        
 
 class CfgutilError(Error):
 
@@ -120,7 +187,7 @@ def installedApps(ecids, **kwargs):
 def get(keys, ecids=[], **kwargs):
     '''get specified key(s) from cfgutil()
     '''
-    if not isinstance(keys, (type([]),set)):
+    if not isinstance(keys, (_list, set)):
         raise TypeError("not list or set: {0}".format(keys))
     _info = {'Command': 'get', 
              'Detail': 'invalid use of cfgutil.get()'}

@@ -25,7 +25,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.1.6'
+__version__ = '2.2.0'
 __url__ = None
 __description__ = ('Collection of tools for managing and automating '
                    'iOS devices')
@@ -88,6 +88,10 @@ __all__ = [
 #   - removed lockcheck from need_to_erase
 # 2.1.7:
 #   - Moved Slackbot back to devicemanager (couldn't import)
+
+# 2.2.0:
+#   - re-work of query, verified, and supervised()
+#   - TO-DO: still needs app verification
 
 ## BUGS:
 # - new devices are causing the manager to exit (fixed in 2.1.4)
@@ -185,18 +189,23 @@ class DeviceManager(object):
         _authdir = os.path.join(location, 'supervision')
         self._supervision = self.config.get('supervision', _authdir)
 
-        # self._devices = []
         self._device = {}
         self._erased = []
         self._list = None
         self._auth = None
+        self._checkin = []
 
     @property
     def record(self):
         return self.config.read()                
 
+    #TO-DO: remove
     @property
     def checkedout(self):
+        '''This is incorrect at best, at worse, it impedes proper
+        functioning
+        '''
+        #TO-DO: remove
         _checked_out = []
         for device in self.findall():
             try:
@@ -206,8 +215,12 @@ class DeviceManager(object):
                 pass
         return _checked_out
 
+    #TO-DO: remove
     @property
     def checkedin(self):
+        '''This is incorrect at best, at worse, it impedes proper
+        functioning
+        '''
         _checked_in = []
         # self.log.debug("checkedin: looking for checked in devices")
         for device in self.findall():
@@ -280,7 +293,6 @@ class DeviceManager(object):
             return _device
         except KeyError:
             self.log.debug("no device record found")
-            pass
         
         # no existing device 
         self.log.debug("creating new device record")
@@ -301,8 +313,30 @@ class DeviceManager(object):
         
         return _device
                                
-    def supervised(self, devices):
-        raise Error("Not Implemented")
+    def supervised(self, ecids, cfgresult):
+        for device in self.findall(ecids):
+            # parse the info for the appmanager
+            app_info = cfgresult.get('installedApps', [])
+            # each app has 4 keys: 
+            #   ['itunesName', 'displayName', bundleIdentifier, 
+            #     'bundleVersion']
+            # display name is useful only when parsing GUI
+            # we install apps with their itunesName
+            _apps = []
+            for app in app_info:
+                name = app.get('itunesName')
+                if name:
+                    _apps.append(name)
+            # get all new apps that were installed (if any)
+            _new = self.apps.unknown(device, _apps)
+            if _new:
+                # only report if new apps were found
+                smsg = "new user apps: {0}".format(_new)
+                msg = "NEW: {0}: {1}".format(device.name, smsg)
+                self.log.info(msg)
+                self.slackbot.send(msg)
+        
+        raise NotImplementedError()
 
     def devicelist(self, refresh=False):        
         '''Returns list of Device objects using cfgutil.list()
@@ -315,8 +349,6 @@ class DeviceManager(object):
             self.log.debug("refreshing device list")
             self._list = cfgutil.list(log=self.log)
             self.config.update({'listed': now})
-        # else:
-        #     self.log.debug("using cached device list")
 
         return self._list
 
@@ -324,11 +356,8 @@ class DeviceManager(object):
         '''Reserved for future conditional erasing
         Returns True (for now)
         '''
-        # self.task.add('lockcheck', [device.ecid])
         device.delete('erased')
         self.task.query('installedApps', [device.ecid])
-#         if device.locked:
-#             return False
         return True
 
     def check_network(self, devices):    
@@ -350,7 +379,7 @@ class DeviceManager(object):
         if not tethered:
             tethering.restart(self.log, timeout=20)
 
-    def checkin(self, info):
+    def checkin(self, info, verifying=False):
         '''
         '''
         device = self.device(info['ECID'], info)
@@ -387,7 +416,10 @@ class DeviceManager(object):
             self.log.debug("{0}: will not be erased".format(name))
             
         device.checkin = datetime.now()
-        self.run(device.ecid)
+        
+        # if verify will call run() if it needs to
+        if not verifying:
+            self.run(device.ecid)
 
     def checkout(self, info):
         '''saves timestamp of device checkout (if not restarting)
@@ -451,54 +483,44 @@ class DeviceManager(object):
             self.config.delete('reason')
 
     def query(self):
-        self.log.debug("checking for device queries")
-
-        available = self.available(ecids=True)
-        check_locked = self.task.get('lockcheck', only=available)
-        if check_locked:
-            self.task.query('cloudBackupsAreEnabled', check_locked)
-            self.task.query('installedApps', check_locked)
+        self.log.debug("checking for queries")
 
         if not self.task.queries():
             self.log.info("no queries to perform")
             return
             
-        cache = {}
+        _cache = {}
         ecidset = set()
         # merge all of the queries into one 
-        for query in self.task.queries():
-            cache[query] = self.task.query(query)
-            ecidset.update(cache[query])
+        for k in self.task.queries():
+            # empty the query of all ECIDs (preserved in _cache)
+            _cache[k] = self.task.query(k)
+            # create a set of all unique ECIDs
+            ecidset.update(_cache[k])
 
-        self.log.debug("query: {0} on {1}".format(cache.keys(), ecidset))
+        # list of all keys for cfgutil.get()
+        queries = _cache.keys()
+        self.log.debug("query: {0}: {1}".format(queries, ecidset))
+
         failed = {}
         info = {}
         missing = []
         try:
             # TO-DO: cfgutil.get() needs to return two dicts and list
-            self.log.debug("{0}: {1}".format(cache.keys(), ecidset))
-            info, failed, missing = cfgutil.get(cache.keys(), ecidset, 
-                                                           log=self.log)
+            self.log.debug("{0}: {1}".format(queries, ecidset))
+            info, failed, missing = cfgutil.get(queries, ecidset, 
+                                                     log=self.log)
             self.log.debug("info: {0}".format(info))
         except cfgutil.CfgutilError as e:
-            self.log.error(e)
+            self.log.error(str(e))
             for k,ecids in cache.items():
-                if k != 'cloudBackupsAreEnabled':
-                    m = 're-adding query: {0}: {1}'.format(k, ecids)
-                    self.log.debug(m)
-                    self.task.query(k, ecids)
+                msg = 're-building query: {0}: {1}'.format(k, ecids)
+                self.log.debug(msg)
+                self.task.query(k, ecids)
             return
 
-        if check_locked:
-            _locked = []
-            for device in self.findall(check_locked):
-                _info = info.get(device.ecid, {})
-                if _info.get('cloudBackupsAreEnabled') is not None:
-                    _locked.append(device.ecid)
 
         for device in self.findall(ecidset):
-            self.log.debug("unlocking device")
-            device.delete('locked')
             # parse the info for the appmanager
             app_info = info.get('installedApps', [])
             # each app has 4 keys: 
@@ -708,57 +730,29 @@ class DeviceManager(object):
         # self.set_background(devices, 'background')
         return devices
         
-
-
-        
-    def clearactivation(self, devices):
-        raise Error("unable to clear activation")
-
-    def activationLocked(self, devices):
-        # technically we could check for installed apps and if
-        # any of the apps aren't in the deployed app list, we have
-        # a possible activation lock.
-        
-        # activation state might be the other key worth checking
-        # cloudBackupsAreEnabled is the key we can look for
-        # if it's defined, the system has been logged into with an
-        # appleID (even if it's false)
-        return False
-        
     def authorization(self):
         '''Uses the directory specified to work out the private key
         and certificate files used for cfgutil
         returns ACAuthentication object
         '''
         if not self._auth:
-            if not self._supervision:
-                raise Error("no supervision directory")
-            self._auth = self._cfgutil_auth(self._supervision)
+            self.log.debug("getting authorization for cfgutil")
+            dir = self._supervision
+        
+            if not os.path.isdir(dir):
+                err = "no such directory: {0}".format(dir)
+                self.log.error(err)
+                raise Error(err)
+
+            for item in os.listdir(dir):
+                file = os.path.join(dir, item)
+                if item.endswith('.crt'):
+                    cert = file
+                elif item.endswith('.key'):
+                    key = file
+    
+            self._auth = cfgutil.Authentication(cert, key, self.log)    
         return self._auth
-
-    def _cfgutil_auth(self, dir):
-        '''Uses the directory specified to work out the private key
-        and certificate files used for cfgutil
-        returns ACAuthentication object
-        '''
-        self.log.debug("getting authorization for cfgutil")
-
-        if not os.path.isdir(dir):
-            err = "no such directory: {0}".format(dir)
-            self.log.error(err)
-            raise Error(err)
-
-        for item in os.listdir(dir):
-            file = os.path.join(dir, item)
-            if item.endswith('.crt'):
-                cert = file
-            elif item.endswith('.key'):
-                key = file
-    
-        # self.log.debug("CERT: {0}".format(cert))
-        # self.log.debug("KEY: {0}".format(key))
-    
-        return cfgutil.Authentication(cert, key, self.log)    
 
     def set_background(self, devices, type):
         '''needs to be re-adapted to new layout
@@ -871,64 +865,11 @@ class DeviceManager(object):
         raise StoppedError("Hold the press!")
 
     @property
-    def locked(self):
-        _locked = []
-        _backgrounds = []
-        # verify devices are still locked?
-        previous = self.config.get('locked', [])
-        # check the devices are still locked
-
-        for device in self.findall():
-            if device.locked:
-                _locked.append(device)
-                if device.background == 'background':
-                    _backgrounds.append(device)
-            else:
-                if device.ecid in previous:
-                    previous.remove(device.ecid)
-                    self.config.update({'locked': previous})
-                    
-        if _backgrounds:
-            self.set_background(_backgrounds, 'locked')
-
-        if _locked:
-            # empty the erase queue of locked devices
-            self.task.erase(only=[d.ecid for d in _locked])
-
-        return _locked        
-
-    def lockdevices(self, ecids=[]):
-        if not ecids:
-            self.log.debug("no devices to lock")
-            return
-        devices = self.findall(ecids)
-        self.log.debug("removing from erase: {0}".format(ecids))
-        # empty the erase queue of locked devices
-        self.task.erase(only=ecids)
-        msg = "locking devices: {0}".format([str(d) for d in devices])
-        self.slackbot.send(msg)
-        self.log.error(msg)
-        _backgrounds = []
-        for device in devices:
-            device.locked = datetime.now()
-            if device.background != 'locked':
-                _backgrounds.append(device)
-        self.set_background(_backgrounds, 'locked')
-        with self.config.lock.acquire():
-            _locked = self.config.get('locked', [])
-            self.config.update({'locked': _locked+ecids})
-        
-    @property
     def quarantined(self):
         _more = self.config.get('quarantine', [])
         if _more:
             self._quarantined = self._quarantined.union(_more)
 
-        backgrounds = []
-#         for device in self.findall(self._quarantined):
-#             if device.background == 'background':
-#                 backgrounds.append(device)
-#         self.set_background(backgrounds, 'alert')
         return list(self._quarantined)
 
     def quarantine(self, ecids=[], task=None):
@@ -946,12 +887,6 @@ class DeviceManager(object):
         self.set_background(_quarantined, 'alert')
         if task:
             self.task.add(task, list(self._quarantined))
-        
-    @property
-    def ignored(self):
-        '''TO-DO: clearer about whether ECIDs or devices are returned
-        '''
-        return self.quarantined + self.checkedout
     
     @property
     def verified(self):
@@ -962,18 +897,7 @@ class DeviceManager(object):
         because they system should be self healing, re-runs
         shouldn't do anything if everything is worked
         '''
-        # deal with locked devices
-        locked_ecids = self.locked
-        for task in ['erase', 'installapps', 'prepare', 'restart']:
-            removed = self.task.get(task, only=locked_ecids)
-            if removed:
-                msg = "{0}: removed locked: {1}".format(task, removed)
-                self.log.debug(msg)
 
-#         for device in self.findall(locked_ecids):            
-#             self.task.query('installedApps', [device.ecid])
-
-        # unlocked = self.findall(exclude=locked_ecids)
         try:
             config.FileLock('/tmp/ipad-restart.lock').acquire(timeout=0)
         except config.TimeoutError:
@@ -981,41 +905,67 @@ class DeviceManager(object):
             return True
             
         devicelist = self.devicelist()
-
-        available = self.available(ecids=True)
-        for device in self.findall(exclude=available):
-            if not device.checkout or device.checkout < device.checkin:                
-                name = device.name
-                self.log.error("{0}: incorrect checkin".format(name))
-        
-        unavailable = self.unavailable(ecids=True)
-        for device in self.findall(exclude=unavailable):
-            if not device.checkin or device.checkout > device.checkin:                
-                name = device.name
-                self.log.error("{0}: incorrect checkout".format(name))
                 
-        
-
+        _verified = True
         for info in devicelist:
             ecid = info['ECID']
             device = self.device(ecid, info)
+            name = device.name
+
             if not device.serialnumber:
                 self.task.query('serialNumber', [ecid])
+            
+            ## Checkin check
+            if not device.checkin:
+                self.log.debug("{0}: never checked in".format(name))
+                _verified = False
+                self._checkin.append(info)
+                continue
 
-            # check erase
-            eraselist = self.task.list('erase', exclude=self.locked)
-            if not device.erased and ecid not in eraselist:
-                if ecid not in self.locked:
-                    self.task.erase([ecid])
+            ## Erased check
+            if not device.erased:
+                self.log.debug("{0}: never erased".format(name))
+                self.task.erase([ecid])
+                _verified = False
+                continue
+                
+            ## Enrollment check
+            if not device.enrolled:
+                self.log.debug("{0}: never enrolled".format(name))
+                # we're just going to have task it for enrollment 
+                # and trust it will work for now
+                
+                self.task.query('isSupervised', [ecid])
+                # self.task.enroll([ecid])
+
+                # I would also like to add some code to look for previous
+                # errors (maybe it couldn't enroll for a reason)
+
+                # this will have to be designed and tested
+                # idea is to load a callback function into the query to 
+                # check the result once the query is made
+
+                # create query and callback for processing
+                # self.task.query('isSupervised', [ecid], 
+                #                 self._isSupervised)
+
+                _verified = False
+                
+            ## App check
+            # I don't think we're going to be able to get away from
+            # rechecking installed apps every time unless:
+            #   - check device for installed apps (needs building)
+            #   - check appmanager for apps that should be installed
+            #   - compare the list, if mismatch:
+            #       - re-query
+            #       - re-compare list, if missing:
+            #           - re-task for installation
+
+            # self.task.query('installedApps', [ecid], 
+            #                 self._appsInstalled)
                 
             
-            if device.erased:
-                if device.erased < device.checkin:
-                    pass
-            
-            if not device.enrolled:
-                pass
-        return False
+        return _verified
         
     def finalize(self, devices):
         '''Placeholder for finalization steps
@@ -1037,8 +987,11 @@ class DeviceManager(object):
                 if _seconds < 60:
                     self.log.debug("ran less than 1 minute ago...")
                     return
+
         self.log.debug("verifying devices")
         if not self.verified:
+            for info in self._checkin:
+                self.checkin(info, verifying=True)
             self.run()
 
     def run(self, ecid=None):

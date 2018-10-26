@@ -1,9 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# import os
+import os
 # import shutil
 import unittest 
+from adapter import ACADAPTER
 
 '''Tests for ACAdapter.scpt
 '''
@@ -16,17 +17,10 @@ __version__ = '1.0.0'
 __url__ = None
 __description__ = 'Tests for ACAdapter.scpt'
 
-## location for temporary files created with tests
-# TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp')
 
 def setUpModule():
-    # try:
-    #     os.mkdir(TMPDIR)
-    # except OSError as e:
-    #     if e.errno != 17:
-    #         raise
     pass
-    
+
 def tearDownModule():
     # shutil.rmtree(TMPDIR)
     pass
