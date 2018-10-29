@@ -2,9 +2,9 @@
 
 import os
 import subprocess
-import logging
 import json
 import stat
+import inspect
 
 '''Execute commands with `cfgutil`
 '''
@@ -29,104 +29,96 @@ __description__ = 'Execute commands with `cfgutil`'
 #   - modified logging
 # 2.0.5:
 #   - fixed bug that caused CfgutilError to overwrite Message
+# 2.1.0:
+#   - added Result class:
+#       - homogenizes returns on many functions
+#       - incorporates result, failed/missing
+#       - contains reference to entire cfgutil output (for debugging)
+#       - contains arguments used for execution (for debugging)
+#       - contains list of ECIDs that were missing from the result
+#       - failed 
+#   - Changed return of most functions to incorporate Result() class
+#   - modified/specialized CfgutilError Exception
+#   - modified Exceptions raised
+#   - no longer raises CfgutilError when TypeError, ValueError or 
+#     RuntimeError are appropriate
+#   - modified keyword arguments with cfgutil():
+#       - returns Result() by default (was dict from json.loads())
+#       - added fmt (default None):
+#           - fmt='json' will return dict returned by json.loads()
+#           - no other keys are supported, key may change
+#       - added file (optional):
+#           - specify a file where returncode, output, error, and args
+#             will be written
+#   - removed InstalledApps (wasn't useful enough)
+#   - added TESTING flag:
+#       - `import cfgutil; cfgutil.TESTING = True`
+#       - if True, will not call cfgutil, but will look for 
+#         kwargs['mock'] or raise RuntimeError
+#       - now sort ECIDs for testing
 
+TESTING = False
+CFGUTILBIN = '/usr/local/bin/cfgutil'
+# this library is useless without cfgutil, so let's error very quickly
+# not sure if thise is ideal, or if I should raise warning or what
+# if not os.path.exists(CFGUTILBIN):
+#     err = "{0}: missing executable".format(CFGUTILBIN)
+#     raise RuntimeError(err)
 
-# global reservation of <type 'list'>
-_list = type([])
 
 class Error(Exception):
+    pass
 
-    def __init__(self, err, ecids, info={}):
-        self.ecids = ecids
-        self.msg = err
-        self.command = info.get('Command','')
-        self.message = info.get('Message','')
-        self.domain = info.get('Domain','')
-        self.reason = info.get('FailureReason','')
-        self.code = info.get('Code','')
-        self.detail = info.get('Detail','')
-        self.unaffected = info.get('UnaffectedDevices', [])
-        self.affected = info.get('AffectedDevices', ecids)
-        
-    def __str__(self):
-        err = "{0}: {1}".format(self.command, self.msg)
-        if self.message:
-            err += ": {0}".format(self.message)
-        return err
-
-
-class Result(object):
-    '''
-    '''
-    def __init__(self, ecids, cfgout, _exec=[]):
-        self._info = cfgout
-        self._exec = _exec
-        self.command = cfgout.get('Command')
-        self.output = cfgout.get('Output', {})
-        _type = cfgout.get('Type')
-        self.ecids = cfgout.get('Devices', [])
-        self.missing = [x for x in ecids if x not in self.ecids]
-        # set attributes 
-        if _type == 'CommandOutput':
-            if self.command == 'get':
-                # process get output
-            else:
-                # Not sure if I like: self.erase = self.ecids
-                # setattr(self, self.command, self.ecids)
-                pass
-        elif _type == 'Error':
-            # process errors
-        else:
-            # unknown
-            pass
-
-    def succeeded(self):
-        return self.ecids
-
-    def failed(self):
-        _failed = self.missing
-        # process other types of failure
-        return _failed
-
-    def info(self, ecid, key=None):
-        '''potential to be amazingly helpful or a pain in the ass
-        '''
-        # result.info() -> all of everything?
-        # result.info(ecid) -> info for just ecid?
-        # result.info(ecids) -> info for all specified ecids?
-        # result.info(ecids, keys) -> info for specified ecids and keys
-        pass
-        
-    def get(self, ecids, keys):
-        # result.get(ecid)
-        pass
-        
 
 class CfgutilError(Error):
 
-    def __init__(self, message, ecids, info={}):
-        self.ecids = ecids
-        self.msg = message
-        self.command = info.get('Command','')
-        self.message = info.get('Message','')
-        self.domain = info.get('Domain','')
-        self.reason = info.get('FailureReason','')
-        self.code = info.get('Code','')
-        self.detail = info.get('Detail','')
+    def __init__(self, info, msg='', cmd=None):
+        if not cmd:
+            cmd = inspect.stack()[1][3]
+        self.command = info.get('Command', cmd)
+        self.message = info.get('Message', msg)
+        self.code = info.get('Code', 61) # ENODATA: 'No data available'
+        self.domain = info.get('Domain', '')
+        self.reason = info.get('FailureReason', '')
+        self.detail = info.get('Detail', '')
+        self.affected = info.get('AffectedDevices', [])
         self.unaffected = info.get('UnaffectedDevices', [])
-        self.affected = info.get('AffectedDevices', ecids)
-        
+
     def __str__(self):
-        err = "{0}: {1}".format(self.command, self.msg)
-        if self.message:
-            err += ": {0}".format(self.message)
-        return err
+        # ["<cmd>: "] + "<msg> (<code>)" + [": devices: <affected>"]
+        _str = "{0} ({1})".format(self.message, self.code)
+        if self.command:
+            _str = "{0}: {1}".format(self.command, _str)
+        if self.affected:
+            _str += ": devices: {0}".format(self.affected)
+        return _str
+
+    def __repr__(self):
+        # include attributes with values
+        _repr = '<{0}.{1} object at 0x{2:x} {3}>'
+        _dict = {k:v for k,v in self.__dict__.items() if v}
+        return _repr.format(__name__, 'Error', id(self), _dict)
+
+
+class Result(object):
+    def __init__(self, cfgout, ecids=[], err=[], cmd=[]):
+        self._output = cfgout
+        self.cmdargs = cmd
+        # self._type = cfgout.get('Type', '')
+        self.command = cfgout.get('Command', '')
+        self.ecids = cfgout.get('Devices', [])
+        self.output = cfgout.get('Output', {})
+        self.missing = [x for x in ecids if x not in self.ecids]
+
+    def get(self, ecid, default=None):
+        return self.output.get(ecid, default)
 
 
 class Authentication(object):
 
     def __init__(self, cert, pkey, log=None):
         if not log:
+            import logging
             self.log = logging.getLogger(__name__)
             self.log.addHandler(logging.NullHandler())
         for file in [cert, pkey]:
@@ -139,7 +131,7 @@ class Authentication(object):
             ## stat.S_IREAD|stat.S_IWRITE == 0600 (-rw-------)
             o_rw = stat.S_IREAD | stat.S_IWRITE
             if stat.S_IMODE(st_mode) != o_rw:
-                os.chmod(file, 0600)
+                os.chmod(file, 0o0600)
         self.cert = cert
         self.key = pkey
     
@@ -161,142 +153,78 @@ def requires_authentication(subcmd):
     else:
         return False
 
+def _record(file, info):
+    with open(file, 'a+') as f:
+        f.write("{0}\n".format(info))
+
 def erase(ecids, **kwargs):
-    if not ecids:
-        _info = {'Command': 'erase',
-                 'Detail': 'invalid use of cfgutil.erase()'}
-        raise CfgutilError('no ecids were specfied', [], _info)
-    cfgout = cfgutil('erase', ecids, **kwargs)
-    _succeeded = cfgout.get('Devices', [])
-    missing = [x for x in ecids if x not in _succeeded]
-    return _succeeded, missing
-
-def installedApps(ecids, **kwargs):
-    if not ecids:
-        _info = {'Command': 'get installedApps',
-                 'Detail': 'invalid use of cfgutil.installedApps()'}
-        raise CfgutilError('no ecids were specfied', [], _info)
-    cfgoutput = get(['installedApps'], ecids, **kwargs)
-    installed = {}
-    for ecid,v in cfgoutput.items():
-        installed[ecid] = []
-        for app in v['installedApps']:
-            installed[ecid].append(app['displayName'])
-    return installed
-    
-def get(keys, ecids=[], **kwargs):
-    '''get specified key(s) from cfgutil()
+    '''erase specified ECIDs
     '''
-    if not isinstance(keys, (_list, set)):
-        raise TypeError("not list or set: {0}".format(keys))
-    _info = {'Command': 'get', 
-             'Detail': 'invalid use of cfgutil.get()'}
+    if not ecids:
+        raise ValueError('no ECIDs specified')
+    return cfgutil('erase', ecids, **kwargs)
+    
+def get(keys, ecids, **kwargs):
+    '''get information about <keys> from specified ECIDs
+    '''
+    if not ecids:
+        raise ValueError('no ECIDs specified')
     if not keys:
-        raise CfgutilError('no keys were specfied', ecids, _info)
-    elif not ecids:
-        raise CfgutilError('no ecids were specfied', [], _info)
-
-    if not isinstance(keys, (type([]),set)):
-        raise TypeError("not list or set: {0}".format(keys))
-
-    cfgout = cfgutil('get', ecids, args=keys, **kwargs)
-
-    _succeeded = cfgout.get('Devices', [])
-    missing = [x for x in ecids if x not in _succeeded]
-
-    info = {}
-    for ecid in ecids:
-        device = cfgout['Output'].get(ecid, {})
-        info[ecid] = {}
-        for key in keys:
-            info[ecid][key] = device.get(key)
-
-    #TO-DO: figure out failure
-    failed = {}
-    return info, failed, missing
+        keys = ['all']
+    return cfgutil('get', ecids, args=keys, **kwargs)
 
 def list(*args, **kwargs):
     '''Returns list of attached devices
     '''
-    cfginfo = cfgutil('list', **kwargs)
-    devices = []
-    for device in cfginfo['Output'].values():
-        devices.append(device)
-    return devices
+    output = cfgutil('list', *args, fmt='json', **kwargs)
+    return [info for info in output['Output'].values()]
 
 def wallpaper(ecids, image, args, auth, **kwargs):
-    _info = {'Command': 'wallpaper', 
-             'Detail': 'invalid use of cfgutil.wallpaper()'}
+    '''Set the wallpaper of specified ECIDs using image
+    '''
     if not ecids:
-        raise CfgutilError('no ecids were specfied', [], _info)
+        raise ValueError('no ECIDs specified')
     elif not image:
-        raise CfgutilError('no image was specfied', ecids, _info)
+        raise ValueError('no image was specfied')
 
     if not args:
         args = ['--screen', 'both']
     args.append(image)
-    cfgout = cfgutil('wallpaper', ecids, args, auth, **kwargs)
-    _succeeded = cfgout.get('Devices', [])
-    missing = [x for x in ecids if x not in _succeeded]
-    return _succeeded, missing
+
+    return cfgutil('wallpaper', ecids, args, auth, **kwargs)
         
 def prepareDEP(ecids, **kwargs):
-    '''prepare devices using DEP
+    '''prepare specified ECIDs using DEP
     '''
     if not ecids:
-        _info = {'Command': 'prepare', 
-                 'Detail': 'invalid use of cfgutil.prepareDEP()'}
-        raise CfgutilError('no ecids were specfied', [], _info)
+        raise ValueError('no ECIDs specified')
     args = ['--dep', '--skip-language', '--skip-region']
-    cfgout = cfgutil('prepare', ecids, args=args)
-    _succeeded = cfgout.get('Devices', [])
-    missing = [x for x in ecids if x not in _succeeded]
-    return _succeeded, missing
+    return cfgutil('prepare', ecids, args, **kwargs)
 
 def prepareManually(ecids, **kwargs):
     '''prepare devices manually
     '''
-    _info = {'Command': 'prepare', 
-             'Detail': 'invalid use of cfgutil.prepareManually()'}
     if not ecids:
-        raise CfgutilError('no ecids were specfied', [], _info)
+        raise ValueError('no ECIDs specified')
     raise NotImplementedError('prepareManually')
  
-def cfgutil(command, ecids=[], args=[], auth=None, 
-                             timeout=None, log=None):
+def cfgutil(command, ecids=[], args=[], auth=None, log=None, 
+            file=None, fmt=None, **kwargs):
     '''Executes /usr/local/bin/cfgutil with specified arguments
     returns output in JSON
     '''
-    _cfginfo = {'Command':command}
     if not log:
+        import logging
         log = logging.getLogger(__name__)
         log.addHandler(logging.NullHandler())
 
-    if not command:
-        import inspect
-        caller = inspect.stack()[1][3]
-        _info = {'Command': 'UNKNOWN', 
-                 'Detail': 'called by: {0}'.format(caller),
-                 'Code': 102 } # errno.ED /* ? */
-        raise CfgutilError('command missing', ecids, _info)
-
-    cfgutilbin = '/usr/local/bin/cfgutil'
-
-    # can't run cfgutil if it doesn't exist (or if broken symlink)
-    if not os.path.exists(cfgutilbin):
-        err = "executable missing: {0}".format(cfgutilbin)
-        raise CfgutilError(err, ecids, _cfginfo)
-
-    # pre-append '--ecid' per specified ECID as flat list
-    #   [ecid1, ecid2] -> ['--ecid', ecid1, '--ecid', ecid2]
-    ecidargs = [x for e in ecids for x in ('--ecid', e)]
-
     # build the command
-    cmd = [cfgutilbin, '--format', 'JSON']
+    cmd = [CFGUTILBIN, '--format', 'JSON']
 
-    # add timeout (if one)
-    if timeout:
-        cmd += ['--timeout', str(timeout)]
+    if not command:
+        err = 'cfgutil: no command was specfied'
+        log.error(err)
+        raise RuntimeError(err)
 
     # list of sub-commands that require authentication
     if requires_authentication(command) or auth:
@@ -304,42 +232,73 @@ def cfgutil(command, ecids=[], args=[], auth=None,
         try:
             cmd += auth.args()
         except AttributeError:
-            err = "invalid authentication: {0}".format(auth)
-            raise CfgutilError(err, ecids, _cfginfo)
-        
+            log.error("invalid authentication: {0}".format(auth))
+            raise
+
+    # pre-append '--ecid' per specified ECID as flat list
+    #   [ecid1, ecid2] -> ['--ecid', ecid1, '--ecid', ecid2]
+    # sorted for comparison in TESTING
+    ecidargs = [x for e in sorted(ecids) for x in ('--ecid', e)]
+
     # add the targeted ECIDs, command, and args
     cmd += ecidargs + [command] + args
     
     log.debug("> {0}".format(" ".join(cmd)))
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
-                              stderr=subprocess.PIPE)
-    out, err = p.communicate()
+    if not TESTING:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
+                                  stderr=subprocess.PIPE)
+        out, err = p.communicate()    
+        if file:
+            # record everything to specified file
+            _info = {'execution': cmd, 'output': out, 'error': err,
+                     'ecids': ecids, 'args': args, 'command': command,
+                     'returncode': p.returncode}
+            _record(file, _info)
+    else:
+        try:
+            _mock = kwargs['mock']
+            out, err = _mock['output'], _mock['error']
+            p = object()
+            p.returncode = _mock['returncode']
+            if _mock['execution'] != cmd:
+                log.error("execution flags did not match")
+                log.debug("command args: {0}".format(cmd))
+                log.debug("expected: {0}".format(_mock['execution']))
+                raise Error("execution flags did not match")
+        except KeyError:
+            log.error("no mock data provided for testing")
+            raise RuntimeError("no data to test")
+
     try:
         cfgout = json.loads(out)
-    except:
-        cfgout = _cfginfo
+        log.debug("cfgutil: output: {0}".format(cfgout))
+    except Exception as e:
+        # TO-DO: need to test failed commands
+        log.error("cfgutil: couldn't load output")
+        cfgout = {'Command':command, 'Type':'Error', 
+                  'Message': 'no output was returned',
+                  'FailureReason': 'cfgutil did not return valid JSON',
+                  'Output': {}, 'Detail': str(e)}
 
+    # pseudo-reverse-compatibility (mostly for cfgutil.list())
+    if fmt and fmt.lower() == 'json':
+        return cfgout
+
+    # cfgutil command failed (action wasn't performed)
     if p.returncode != 0:
         cfgerr = "cfgutil: {0}: failed".format(command)
         if err:
             cfgerrs = [x for x in err.splitlines() if x]
             cfgerr = cfgout.get('Message', cfgerrs[-1])
-        if not out:
-            log.debug("cfgutil: {0}: missing output".format(command))
-        else:
-            log.debug("cfgutil: error: {0}".format(cfgout))
-        raise CfgutilError(cfgerr, ecids, cfgout)
+        raise CfgutilError(cfgout, cfgerr, command)
 
     type = cfgout.get('Type')
     if type == 'Error':
-        cfgerr = cfgout.get('Message', 'Unknown Error')
-        raise CfutilError(cfgerr, ecids, cfgout)
+        raise CfutilError(cfgout, 'Unknown error', command)
     elif type is None:
-        cfgerr = cfgout.get('Message', 'Unknown Error')
-        raise CfutilError(cfgerr, ecids, cfgout)
+        raise CfutilError(cfgout, 'missing output type', command)
 
-    log.debug("cfgutil: output: {0}".format(cfgout))
-    return cfgout
+    return Result(cfgout, ecids, cmd)
 
 if __name__ == '__main__':
     pass

@@ -18,23 +18,18 @@ __version__ = '1.0.1'
 __url__ = None
 __description__ = 'Tests for actools.cfgutil'
 
-from actools import cfgutil
-
-cmd = ['/usr/bin/cfgutil', 'version']
 try:
-    VERSION = subprocess.check_output(cmd).rstrip()
-except OSError as e:
-    if e.errno == 2:
-        print("WARNING: missing cfgutil: some tests will not be run...", 
-              file=sys.stderr)
-        MISSINGBIN = True
-    else:
-        raise e
+    import cfgutil
+except ImportError:
+    from actools import cfgutil
 
+LOGDIR = os.path.join(os.path.dirname(__file__), 'private')
+LOG = os.path.join(LOGDIR, 'cfgutilexec.log')
 
 def setUpModule():
+    # cfgutil.TESTING = True
     pass
-
+    
 def tearDownModule():
     '''One time cleanup for entire module.
     '''
@@ -58,6 +53,33 @@ class BaseTestCase(unittest.TestCase):
     def tearDown(self):
         pass
 
+class TestExecutionRecord(BaseTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.kwargs = {'file': LOG}
+        #.ecids = [x['ECID'] for x in cfgutil.list(**cls.kwargs)]
+        cls.ecids = ['0x1D78A614D80026', '0x1D481C2E300026', 
+                     '0x10000000000001']
+    
+    def setUp(self):
+        self.kwargs = self.__class__.kwargs
+        self.ecids = self.__class__.ecids
+
+#     def testRead(self):
+#         import ast
+#         data = []
+#         with open(LOG, 'r') as f:
+#             for line in f.readlines():
+#                 data.append(ast.literal_eval(line))
+#         print(data)
+
+    def test_run_prepare(self):
+        cfgutil.prepareDEP(self.ecids, **self.kwargs)
+
+#     def test_run_erase(self):
+#         cfgutil.erase(self.ecids, **self.kwargs)
+
 
 class ActionTestCase(BaseTestCase):
     '''Test common behavior across all actions
@@ -79,10 +101,9 @@ class ActionTestCase(BaseTestCase):
         '''test CfgutilError is raised when called with empty list
         '''
         if self.action:
-            with self.assertRaises(cfgutil.CfgutilError):
+            with self.assertRaises(ValueError):
                 self.action([])
 
-    @unittest.skipIf(MISSINGBIN, "cfgutil binary missing")
     def test_missing_device(self):
         '''test CfgutilError is raised when called on missing ECID
         '''
@@ -92,12 +113,19 @@ class ActionTestCase(BaseTestCase):
                 devices = self.action(ecids, *self.args, **self.kwargs)
 
 
+@unittest.skip("not implemented")
 class TestCfgutilError(BaseTestCase):
     '''Test for CfgutilError
     '''
     pass
 
 
+@unittest.skip("not implemented")
+class TestResult(BaseTestCase):
+    pass
+
+
+@unittest.skip("takes too long")
 class TestErase(ActionTestCase):
 
     def setUp(self):
@@ -106,7 +134,7 @@ class TestErase(ActionTestCase):
         self.ecids = [] #need to come up with a way of finding these
 
 
-    @unittest.skipIf(MISSINGBIN, "cfgutil binary missing")
+#     @unittest.skipIf(MISSINGBIN, "cfgutil binary missing")
     def test_erase_devices_with_missing_device(self):
         '''test what happens when missing device is included
         '''
@@ -123,6 +151,7 @@ class TestErase(ActionTestCase):
             self.fail("incorrect Exception raised: {0}".format(ecls))
 
 
+@unittest.skip("takes too long")
 class TestPrepareDEP(ActionTestCase):
 
     def setUp(self):
@@ -130,10 +159,12 @@ class TestPrepareDEP(ActionTestCase):
         self.action = cfgutil.prepareDEP
 
 
+@unittest.skip("takes too long")
 class TestWallpaper(BaseTestCase):
     pass
 
 
+@unittest.skip("takes too long")
 class TestPrepareManually(ActionTestCase):
 
     def setUp(self):
@@ -141,18 +172,17 @@ class TestPrepareManually(ActionTestCase):
         self.action = cfgutil.prepareManually
 
 
-class TestInstalledApps(ActionTestCase):
-    pass
-
-
+@unittest.skip("takes too long")
 class TestGet(BaseTestCase):
     pass
 
 
+@unittest.skip("takes too long")
 class TestList(BaseTestCase):
     pass
 
 
+@unittest.skip("takes too long")
 class TestRequiresAuth(BaseTestCase):
     pass
 
