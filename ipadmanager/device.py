@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.0.1'
+__version__ = '2.0.3'
 __url__ = None
 __description__ = 'Persistant iOS device record'
 __all__ = ['Device', 'DeviceError']
@@ -21,6 +21,10 @@ __all__ = ['Device', 'DeviceError']
 ## CHANGELOG:
 # 2.0.1:
 #   - added generic timestamp setter
+# 2.0.2:
+#   - added isSupervised, installedApps to erase reset
+# 2.0.3:
+#   - added supervised property
 
 class Error(Exception):
     pass
@@ -115,7 +119,8 @@ class Device(object):
             return None
 
     def update(self, key, value):
-        _attrmap = {'serialNumber': 'serialnumber'}
+        _attrmap = {'serialNumber': 'serialnumber',
+                    'isSupervised': 'supervised'}
         attribute = _attrmap.get(key)
         if attribute:
             setattr(self, attribute, value)
@@ -187,13 +192,25 @@ class Device(object):
         self._timestamp('checkout', timestamp)
 
     @property
+    def supervised(self):
+        return self.config.setdefault('isSupervised', False)
+
+    @supervised.setter
+    def supervised(self, value):
+        if not isinstance(value, bool):
+            raise TypeError('not boolean: {0}'.format(value))
+        self.config.update({'isSupervised': value})
+
+    @property
     def erased(self):
         return self.config.get('erased')
 
     @erased.setter
     def erased(self, timestamp):
         self._timestamp('erased', timestamp)
-        self.config.deletekeys(['background', 'apps', 'enrolled'])
+        _reset = ['background', 'apps', 'enrolled', 'isSupervised', 
+                  'installedApps']
+        self.config.deletekeys(_reset)
 
     @property
     def locked(self):
