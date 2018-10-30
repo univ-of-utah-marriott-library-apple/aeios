@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.0.5'
+__version__ = '2.1.0'
 __url__ = None
 __description__ = 'Execute commands with `cfgutil`'
 
