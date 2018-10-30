@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.0.3'
+__version__ = '2.4.0'
 __url__ = None
 __description__ = 'Persistant iOS device record'
 __all__ = ['Device', 'DeviceError']
@@ -25,6 +25,8 @@ __all__ = ['Device', 'DeviceError']
 #   - added isSupervised, installedApps to erase reset
 # 2.0.3:
 #   - added supervised property
+# 2.4.0:
+#   - modified app property to be more informative
 
 class Error(Exception):
     pass
@@ -221,13 +223,16 @@ class Device(object):
 
     @property
     def apps(self):
-        return self.config.setdefault('apps', [])
+        return self.config.setdefault('installedApps', [])
 
     @apps.setter
     def apps(self, applist):
         if not isinstance(applist, list):
             raise TypeError("{0}: not list".format(applist))
-        self.config.reset('apps', applist)
+        try:
+            self.config.reset('installedApps', applist)
+        except:
+            self.config.update({'installedApps': applist})
     
     @property
     def background(self):

@@ -56,6 +56,9 @@ __description__ = 'Execute commands with `cfgutil`'
 #       - if True, will not call cfgutil, but will look for 
 #         kwargs['mock'] or raise RuntimeError
 #       - now sort ECIDs for testing
+# 2.1.1:
+#   - fixed issue where _record() would raise IOError if the record
+#     didn't exist
 
 TESTING = False
 CFGUTILBIN = '/usr/local/bin/cfgutil'
@@ -154,9 +157,19 @@ def requires_authentication(subcmd):
         return False
 
 def _record(file, info):
-    with open(file, 'a+') as f:
-        f.write("{0}\n".format(info))
-
+    if not os.path.exists(file):
+        try:
+            dir = os.path.dirname(file)
+            os.makedirs(os.path.dirname(file))
+        except OSError as e:
+            if e.errno != 17 or not os.path.isdir(dir):
+                raise
+        with open(file, 'w+') as f:
+            f.write("{0}\n".format(info))
+    else:
+        with open(file, 'a+') as f:
+            f.write("{0}\n".format(info))
+        
 def erase(ecids, **kwargs):
     '''erase specified ECIDs
     '''
