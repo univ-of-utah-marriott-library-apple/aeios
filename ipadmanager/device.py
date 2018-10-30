@@ -119,8 +119,7 @@ class Device(object):
             return None
 
     def update(self, key, value):
-        _attrmap = {'serialNumber': 'serialnumber',
-                    'isSupervised': 'supervised'}
+        _attrmap = {'serialNumber': 'serialnumber'}
         attribute = _attrmap.get(key)
         if attribute:
             setattr(self, attribute, value)
