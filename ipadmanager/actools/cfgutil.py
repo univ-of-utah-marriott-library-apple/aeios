@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.1.0'
+__version__ = '2.2.0'
 __url__ = None
 __description__ = 'Execute commands with `cfgutil`'
 
@@ -59,6 +59,15 @@ __description__ = 'Execute commands with `cfgutil`'
 # 2.1.1:
 #   - fixed issue where _record() would raise IOError if the record
 #     didn't exist
+# 2.2.0:
+#   - renamed CfgutilError to Error
+#   - re-added CfgutilError(Error)
+#   - Added FatalError(Error): raised when cfgutil exits non-zero 
+#     returncode
+#   - minor logging changes
+#   - minor changes with Exception types
+#   - modified cfgutil() to raise FatalError with non-zero returncode
+
 
 TESTING = False
 CFGUTILBIN = '/usr/local/bin/cfgutil'
@@ -70,10 +79,6 @@ CFGUTILBIN = '/usr/local/bin/cfgutil'
 
 
 class Error(Exception):
-    pass
-
-
-class CfgutilError(Error):
 
     def __init__(self, info, msg='', cmd=None):
         if not cmd:
@@ -103,6 +108,18 @@ class CfgutilError(Error):
         return _repr.format(__name__, 'Error', id(self), _dict)
 
 
+class FatalError(Error):
+    '''Raised when execution of cfgutil completely fails
+    '''
+    pass
+
+
+class CfgutilError(Error):
+    '''Raised when execution of cfgutil partially fails
+    '''
+    pass
+    
+
 class Result(object):
     def __init__(self, cfgout, ecids=[], err=[], cmd=[]):
         self._output = cfgout
@@ -128,7 +145,7 @@ class Authentication(object):
             if not os.path.exists(file):
                 err = "missing file: {0}".format(file)
                 log.error(err)
-                raise CfgutilError(err, ecids=[])
+                raise RuntimeError(err)
             ## check file mode
             st_mode = os.stat(file).st_mode
             ## stat.S_IREAD|stat.S_IWRITE == 0600 (-rw-------)
@@ -277,10 +294,10 @@ def cfgutil(command, ecids=[], args=[], auth=None, log=None,
                 log.error("execution flags did not match")
                 log.debug("command args: {0}".format(cmd))
                 log.debug("expected: {0}".format(_mock['execution']))
-                raise Error("execution flags did not match")
+                raise RuntimeError("execution flags did not match")
         except KeyError:
             log.error("no mock data provided for testing")
-            raise RuntimeError("no data to test")
+            raise ValueError("no data to test")
 
     try:
         cfgout = json.loads(out)
@@ -303,13 +320,13 @@ def cfgutil(command, ecids=[], args=[], auth=None, log=None,
         if err:
             cfgerrs = [x for x in err.splitlines() if x]
             cfgerr = cfgout.get('Message', cfgerrs[-1])
-        raise CfgutilError(cfgout, cfgerr, command)
+        raise FatalError(cfgout, cfgerr, command)
 
     type = cfgout.get('Type')
     if type == 'Error':
-        raise CfutilError(cfgout, 'Unknown error', command)
+        raise CfgutilError(cfgout, 'Unknown error', command)
     elif type is None:
-        raise CfutilError(cfgout, 'missing output type', command)
+        raise Error(cfgout, 'unexpected output type', command)
 
     return Result(cfgout, ecids, cmd)
 
