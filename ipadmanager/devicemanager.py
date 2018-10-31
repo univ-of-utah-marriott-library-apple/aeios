@@ -25,7 +25,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.2.2'
+__version__ = '2.2.1'
 __url__ = None
 __description__ = ('Collection of tools for managing and automating '
                    'iOS devices')
@@ -133,9 +133,9 @@ __all__ = [
 #   - fixed minor errors
 #   - incorporated changes from device: 2.4.0 
 # 2.2.2:
-#   - verified(): fixed bug that failed to re-task erase
-
-
+#   - added exception handling for cfgutil.FatalError (2.2.0)
+#   - trying to figure out why random errors started occurring on
+#     iOS 12.1 cfgutil 2.7.1(444)
 
 class Error(Exception):
     pass
@@ -697,48 +697,45 @@ class DeviceManager(object):
 
         self.check_network(self.findall(ecids))
     
-        self.log.info("preparing devices: {0}".format(ecids))
+        prepared, failed = [], []
         try:
+            self.log.info("preparing devices: {0}".format(ecids))
             result = cfgutil.prepareDEP(ecids, log=self.log, 
                                         file=self._cfgutillog)
-            prepared, missing = result.ecids, result.missing
-            self.task.prepare(missing)
-            self.task.installapps(prepared)
+            prepared, failed = result.ecids, result.missing
         except cfgutil.CfgutilError as e:
+            self.log.error("possible failure: {0!s}".format(e))
+            prepared, failed = e.unaffected, e.affected
+        except cfgutil.FatalError as e:
             self.log.error("prepare failed: {0!s}".format(e))
             # self.recover(e)
             if "must be erased" in e.message:
-                self.task.erase(e.affected)
-                self.task.prepare(e.unaffected)
+                failed = e.ecids
             elif e.detail == "Network communication error.":
-                self.task.prepare(e.unaffected)
+                # started happening a lot with macOS10.12 and iOS12.1
+                # restarting the device seems to fix the issue, but
+                # there's no way to restart an unsupervised device
+                # without physical interaction
+                # tethering.stop(self.log) # doesn't fix
+                # IDEA: could (maybe) install Wi-Fi profile and retry
+                prepared, failed = e.unaffected, e.affected
             else:
                 # put everything back into the queue
-                self.task.prepare(tasked)
+                failed = e.ecids
             raise
         except Exception as e:
             self.log.error("prepare: unexpected error: {0!s}".format(e))
-            self.task.prepare(tasked)
+            failed = e.ecids
             raise
-
-        if not prepared:
-            self.log.error("no devices were prepared")
-            self.log.debug("re-tasking: {0}".format(ecids))
-            self.task.prepare(ecids)
-            return []
-        elif missing:
-            self.log.error("devices went missing: {0}".format(missing))
-            self.task.prepare(missing)
-
-        prepared_devices = self.findall(prepared)
-        names = [str(d) for d in prepared_devices]
-        self.log.info("successfully prepared: {0}".format(names))
-
-        for device in prepared_devices:
-            device.enrolled = datetime.now()
-
-        self.set_background(prepared_devices, 'alert')
-        return prepared_devices
+        finally:
+            self.task.prepare(failed)
+            self.task.installapps(prepared)
+            prepared_devices = self.findall(prepared)
+            names = [str(d) for d in prepared_devices]
+            self.log.info("successfully prepared: {0}".format(names))
+            for device in prepared_devices:
+                device.enrolled = datetime.now()
+            self.set_background(prepared_devices, 'alert')
 
     def installapps(self, devices):
         if self.stopped:
@@ -1008,7 +1005,13 @@ class DeviceManager(object):
                 self.log.error("{0}: never enrolled".format(msg))
                 enroll = _tasks.setdefault('prepare', [])
                 enroll.append(device.ecid)
-
+            # might be a messy bandaid...
+            elif (device.checkin < device.erased < device.enrolled):
+                # remove this ECID from the prepare
+                ecid = self.task.get('prepare', only=[device.ecid])
+                _msg = "{0}: removed prepare task".format(msg)
+                if ecid:                    
+                    self.log.debug(_msg)
              
             ## App check
             self.log.debug("{0}: checking apps".format(msg))
@@ -1070,7 +1073,10 @@ class DeviceManager(object):
             self.log.debug("skipping finalization")
             self.config.update({'finished':datetime.now()})
             return
+        else:
+            self.log.debug("finalizing devices")
 
+        self.log.debug("finalization: adding queries")
         ecids = self.available(ecids=True)
         self.task.query('isSupervised', ecids)
         self.task.query('installedApps', ecids)
@@ -1079,7 +1085,7 @@ class DeviceManager(object):
 
         retasked_ecids = set()
         if not self.verified:
-            self.log.error("verification failed")
+            self.log.error("finalization: verification failed")
             self.log.info("Adding to agenda:")
             for k,v in self.task.record.items():
                 if v:
@@ -1096,12 +1102,16 @@ class DeviceManager(object):
             elif device.background != 'background':
                 finished.append(device)
 
-        if unfinished:
-            self.set_background(unfinished, 'alert')
-        if finished:
-            self.set_background(finished, 'background')
+        try:
+            if unfinished:
+                self.set_background(unfinished, 'alert')
+            if finished:
+                self.set_background(finished, 'background')
+        except cfgutil.Error as e:
+            self.log.error("unable to set backgrounds")
             
         self.config.update({'finished':datetime.now()})
+        self.log.debug("finalization completed")
             
     def run(self, ecid=None):
         # keep multiple managers from running simultaneously
