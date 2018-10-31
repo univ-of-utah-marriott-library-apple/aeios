@@ -25,7 +25,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.2.1'
+__version__ = '2.2.2'
 __url__ = None
 __description__ = ('Collection of tools for managing and automating '
                    'iOS devices')
@@ -132,6 +132,9 @@ __all__ = [
 # 2.2.1:
 #   - fixed minor errors
 #   - incorporated changes from device: 2.4.0 
+# 2.2.2:
+#   - verified(): fixed bug that failed to re-task erase
+
 
 
 class Error(Exception):
@@ -979,6 +982,7 @@ class DeviceManager(object):
             if not device.erased:
                 self.log.error("{0}: never erased".format(msg))
                 erase = _tasks.setdefault('erase', [])
+                erase.append(device.ecid)
                 self.log.debug("{0}: skipping other checks".format(msg))
                 continue
                 

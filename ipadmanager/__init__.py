@@ -15,7 +15,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.2.1'
+__version__ = '2.2.2'
 __url__ = None
 __description__ = ('Collection of tools for managing and automating '
                    'iOS devices')
