@@ -1,0 +1,29 @@
+2018-12-05 08:48:09.120 AssetCacheTetheratorUtil[54828:6445525] Tetherator status: {
+    "Paired Devices" =     (
+                {
+            "Check In Pending" = No;
+            "Check In Retry Attempts" = 0;
+            "Checked In" = No;
+            "Device Location ID" = 336592896;
+            "Device Name" = "test-ipad-pro";
+            "Serial Number" = DMPVAA00J28K;
+            Tethered = No;
+        },
+                {
+            "Check In Pending" = No;
+            "Check In Retry Attempts" = 3;
+            "Checked In" = Yes;
+            "Device Location ID" = 337641472;
+            "Device Name" = "test-ipad-2";
+            "Serial Number" = DMPWAA01JF8J;
+            Tethered = Yes;
+        }
+    );
+    "Primary Interface" =     {
+        "BSD Name" = en0;
+        "IP Address" = "192.1.1.2";
+        Speed = 1000;
+        "User Readable" = Ethernet;
+        Wired = Yes;
+    };
+}
