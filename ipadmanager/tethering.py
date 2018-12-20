@@ -11,39 +11,57 @@ import sys
 import re
 import subprocess
 import time
+import plistlib
 
 __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '1.0.0'
+__version__ = '1.2.0'
 __url__ = None
-__description__ = 'functions for tethered-caching'
+__description__ = 'functions for iOS device tethering'
 
+ENABLED = False
 
-class TetheringError(Exception):
+class Error(Exception):
+    pass
+    
+
+class TetheringError(Error):
     pass
 
-
-def tetherator(log, arg, output=True):
-    '''get output from `AssetCacheTetheratorUtil`
-    if output is set to false, returncode is returned
+def _old_tetherator(log, arg, output=True):
+    '''get old style output from `AssetCacheTetheratorUtil`
+    if output=False, only the returncode is returned
     '''
     cmd = ['/usr/bin/AssetCacheTetheratorUtil', arg]
     log.debug("> {0}".format(" ".join(cmd)))
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
                               stderr=subprocess.PIPE)
-    out, err = p.communicate()
     # AssetCacheTetheratorUtil prints information to STDERR
+    out, err = p.communicate()
     if output:
-        return err.rstrip()
+        # modify the output of old `AssetCacheTetheratorUtil` to be 
+        # what is returned in the newer version
+        universal = ['Checked In', 'Serial Number', 'Check In Pending']
+        changed = {'Tethered': 'Bridged', 'Device Name': 'Name',
+                   'Check In Retry Attempts': 'Check In Attempts',
+                   'Device Location ID': 'Location ID'}
+        modified = []
+        for device in _parse_tetherator_status(log, err.rstrip()):
+            info = {v:device[k] for k,v in changed.items()}
+            info.update({k:device[k] for k in universal})
+            modified.append(info)
+        return {'Device Roster': modified}
     else:
         return p.returncode
 
-def parse_tetherator_status(log, status):
+def _parse_tetherator_status(log, status):
     '''re-write of parse_tetherator (more complete parser)
     Does its best to convert output of `AssetCacheTetheratorUtil status`
     into a python dictionary regardless of keys and values.
+
+    (Deprecated in 10.13+)
     '''
 
     # remove newlines and extra whitespace from status
@@ -106,171 +124,232 @@ def parse_tetherator_status(log, status):
 
     # return list of all device dicts
     return tethered_devices
-    
-def parse_tetherator(log):
-    '''incomplete parser but should get SN, name, and tether status
 
-    returns a list of dictionaries for each device
-
-    returns an empty list if no devices are found
-
-    NOTE: I don't know how robust this is...
+def _tetherator(log, arg, output=True):
+    '''get output from `AssetCacheTetheratorUtil` in 10.13+
+    if output=False: returns the exit status
     '''
-    status = tetherator('status')
+    cmd = ['/usr/bin/AssetCacheTetheratorUtil', '--json', arg]
+    log.debug("> {0}".format(" ".join(cmd)))
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
+                              stderr=subprocess.PIPE)
+    out, err = p.communicate()
+    if output:
+        return json.loads(out.rstrip())
+    else:
+        return p.returncode
 
-    # remove newlines and extra whitespace
-    stripped = re.sub(r'\n|\s{4}', '', status)
-    
-    devices = []
-    # get list of attached devices (empty list if no devices are found)
+# decorator
+def dynamic(func):
+    '''
+    decorator to dynamically pick an assign the appropriate 
+    function used for returning information about device tethering
+    function is only calculated once
+    '''
+    # calculate which version function to use (only calculated once)
     try:
-        # try to raise AttributeError as early as possible
-        list = re.search(r'\((.*)\)', stripped).group(1)
-        for d in re.findall(r'\{[^\}]+\}', list):
-            device = {}
-            # get device name (with or without quotes)
-            n = re.search(r'"Device Name" = "?([^";]+)"?;', d)
-            # get serialnumber
-            sn = re.search(r'"Serial Number" = ([^;]+);', d)
-            # get tethered
-            t = re.search(r'Tethered = (Yes|No);', d)
-            tethered = True if t.group(1) == 'Yes' else False
+        # --json flag only available in 10.13+
+        cmd = ['/usr/bin/AssetCacheTetheratorUtil', '--json', 'status']
+        subprocess.check_call(cmd, stdout=subprocess.PIPE, 
+                                   stderr=subprocess.PIPE)
+        # use the newer version
+        _func = _tetherator
+    except subprocess.CalledProcessError:
+        # use the older version
+        _func = _old_tetherator
+    # I'll be honest, this is witchcraft...
+    # TO-DO: convert from witchcraft to science
+    def wrapper(*args, **kwargs):
+        return _func(*args, **kwargs)
+    return wrapper
 
-            device['Device Name'] = n.group(1)
-            device['Seral Number'] = sn.group(1)
-            device['Tethered'] = tethered
-            devices.append(device)
+@dynamic
+def tetherator():
+    '''function called is determined by the @dynamic decorator
+    '''
+    # NOTE: I find this strange, because I don't define _decorated()
+    #       but it doesn't matter what I call: f(), blah(), broken()
+    #       ... everything seems to point to the wrapped function
+    #           and I'm not quite sure how, or if this will bite me
+    # all *args and **kwargs are passed to the decorated function
+    return _decorated()
 
-    except AttributeError as e:
-        log.error("unable to parse output: {0}".format(e))
-        raise TetherError(e)
-    
-    return devices
+  
 
-def wait_for_devices(log, prev, timeout=10):
+## additional tools
+
+def wait_for_devices(log, previous, timeout=10, poll=2):
     '''compare items in the previous device list with devices that
     appear
     '''
+
     log.info("waiting for devices to reappear")
-    prev_sn = [d['Serial Number'] for d in prev]
+    prev_sn = [d['Serial Number'] for d in previous]
     found = []
     tethered = []
-    count = 0
+    count = timeout / poll
 
     while count < timeout:
-        time.sleep(2)
         current = devices(log)
-        for d in current:
-            sn = d['Serial Number']
-            name = d['Device Name']
+        appeared = []
+        
+        for device in current:
+            sn = device['Serial Number']
+            name = device['Name']
+            
+            # modify name for logging 
+            if name == 'iPad':
+                name += ' ({0})'.format(sn)
 
             if sn in prev_sn:
                 if sn not in found:
-                    log.debug("{0} reappeared!".format(name))
+                    appeared.append(name)
                     found.append(sn)
             else:
                 found.append(sn)
-                log.debug("new device: {0} appeared!".format(name))
 
-            
-            if d['Tethered']:
+            if device['Checked In']:
                 log.debug("{0} tethered!".format(name))
                 tethered.append(sn)
-            else:
-                log.debug("{0} still connecting...".format(name))
-
+        
+        # superfluous logging
+        if appeared:
+            msg = "device(s) appeared: {0}".format(", ".join(appeared))
+            log.debug(msg)
+            
         sn_set = set(found + prev_sn)
+        # list of items that 
         waiting = [x for x in sn_set if x not in tethered]
+
         if not waiting:
             return
-        log.info("still waiting on {0} device(s)".format(len(waiting)))
-        count += 1
+
+        waitmsg = "waiting on {0} device(s)".format(len(waiting))
+        waitmsg += ": ({0})".format(", ".join(waiting))
+        log.info(waitmsg)
+        count += countpoll
+        time.sleep(poll)
 
     raise TetheringError("devices never came up: {0}".format(waiting))
 
-def restart(log, timeout=20):
-    '''disables and re-enables tethered-caching (requires root)
-    raises subprocess.CalledProcessError if anything goes awry
+def tethered_caching(log, args):
+    '''Start or stop tethered-caching
+    '''
+    _tethered_caching = '/usr/bin/tethered-caching'
+    try:
+        cmd = ['/usr/bin/sudo', '-n', _tethered_caching, args]
+        log.debug("> {0}".format(" ".join(cmd)))
+        subprocess.check_call(cmd, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        log.error("`{0} {1}`: failed".format(_tethered_caching, args))
+        log.error(e)
+        raise Error("tethered-caching failed")    
+
+def restart(log, timeout=30):
+    '''Restart tethered-caching (requires root)
+    (Not supported in 10.13+)
     '''
     log.info("restarting tethered caching")
     # get current devices before restarting
     previous = devices(log)
-
-    stop(log)
+    
     start(log)
-    log.debug("tethered-caching restarted successfully")
+    log.debug("successfully restarted tethering!")
 
-    try:
-        wait_for_devices(log, previous, timeout=timeout)
-    except TetheringError:
-        log.error("some devices never came back up")
+    if previous:
+        try:
+            wait_for_devices(log, previous, timeout=timeout)
+        except TetheringError:
+            log.error("some devices never came back up")
 
 def start(log):
     '''Starts tethered-caching (requires root)
+    (Not supported in 10.13+)
     '''
-    log.debug("starting tethered-caching")
-    try:
-        cmd = ['sudo', '/usr/bin/tethered-caching', '-b']
-        log.debug("> {0}".format(" ".join(cmd)))
-        subprocess.check_call(cmd, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE)
-    except subprocess.CalledProcessError as e:
-        log.error("unable to start tethered-caching")
-        log.error(e)
-        raise  
-    log.info("tethered-caching started")
+    log.info("starting tethering services")
+    tethered_caching(log, '-b')
+    log.debug("successfully started tethering!")
 
 def stop(log):  
-    '''Stops tethered-caching (requries root)
+    '''Stops tethered-caching (requires root)
+    (Not supported in 10.13+)
     '''
+    if not enabled(refresh=False):
+        log.warn("tethering services not running")
+        return
+    log.debug("stopping tethering services")
+    tethered_caching(log, '-k')
+    log.debug("successfully stopped tethering!")
 
-    log.debug("stopping tethered-caching")
-    try:
-        cmd = ['sudo', '/usr/bin/tethered-caching', '-k']
-        log.debug("> {0}".format(" ".join(cmd)))
-        subprocess.check_call(cmd, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE)
-    except subprocess.CalledProcessError as e:
-        log.error("unable to stop tethered-caching")
-        log.error(e)
-        raise
-    log.info("tethered-caching stopped")
-    
-def enabled(log):
-    '''Returns True if Tetherator is enabled, else False
+def enabled(log, refresh=True):
+    '''Returns True if device Tethering is enabled, else False
     '''
-    returncode = tetherator(log, 'isEnabled', output=False)
-    return True if returncode == 0 else False
+    global ENABLED
+    if refresh or ENABLED is None:
+        returncode = tetherator(log, 'isEnabled', output=False)
+        ENABLED = True if returncode == 0 else False
+    return ENABLED
 
 def devices(log):
-    '''shortcut function returning list of all devices found by the
-    Tetherator
+    '''shortcut function returning list of all devices found by
+    tetherator()
     '''
-    status = tetherator(log, 'status')
-    all_devices = parse_tetherator_status(log, status)
-    return all_devices
+    return tetherator(log, 'status')['Device Roster']
 
 def device_is_tethered(log, sn):
-    '''Use device serial number to return boolean of tethered status
+    '''Returns True if device with specified serial number is tethered
     '''
-    for device in devices(log):
-        if device['Serial Number'] == sn:
-            return device['Tethered']
-    
-    err = "no tethering status for device: {0}".format(sn)
-    raise TetheringError(err)
+    return devices_are_tethered(log, [sn])
 
-def devices_are_tethered(log, sns):
-    '''Use device serial number to return boolean of tethered status
+def devices_are_tethered(log, sns, strict=False):
+    '''Use list of devices serial numbers to determine
+    returns True if all specified devices are tethered
     '''
-    all_tethered = True
-    for device in devices(log):
-        for sn in sns:
-            if device['Serial Number'] == sn:
-                if not device['Tethered']:
-                    all_tethered = False
+    if not enabled(log, refresh=False):
+        raise Error("tethering is not enabled")
+
+    _tethered = True
+    missing = []
+    for sn in sns:
+        try:
+            device = info[sn]
+            if not device['Checked In']:
+                _tethered = False
+        except KeyError:
+            _tethered = False
+            missing.append(sn)
+
+    if missing:
+        err = "missing device(s): {0}".format(missing)
+        log.error(err)
+        if strict:
+            raise TetheringError(err)
+    
+    return _tethered
+
+
+    all_tethered =  True
+    try:
+        _queried = [info[sn] for sn in sns]
+        _tethered = [v]
+    except KeyError:
+        err = "missing device: {0}".format(sn)
+        log.error(err)
+        raise TetheringError(err)
+
+    for sn in sns:
+        try:
+            device = info[sn]
+            if not device['Checked In']:
+                all_tethered = False
+        except KeyError:
+            err = "missing device: {0}".format(sn)
+            log.error(err)
+            raise TetheringError(err)
     
     return all_tethered
+
       
 if __name__ == '__main__':
     pass

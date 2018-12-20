@@ -1,0 +1,11 @@
+2018-12-10 09:44:23.140 AssetCacheTetheratorUtil[29661:7322191] Tetherator status: {
+    "Paired Devices" =     (
+    );
+    "Primary Interface" =     {
+        "BSD Name" = Unknown;
+        "IP Address" = Unknown;
+        Speed = 0;
+        "User Readable" = Unknown;
+        Wired = No;
+    };
+}
