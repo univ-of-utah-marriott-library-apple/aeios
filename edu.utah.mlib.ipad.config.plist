@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Supervision</key>
+	<dict>
+		<key>DEP</key> 
+		<true/>
+		<key>SkipLanguageAndLocale</key> 
+		<true/>
+	</dict>
+	<key>Supervision</key>
+	<dict>
+		<key>email</key> 
+		<string></string>
+		<key>magic</key> 
+		<string></string>
+		<key>HostCert</key> 
+		<string></string>
+		<key>mdmUrl</key> 
+		<string></string>
+		<key>name</key> 
+		<string></string>
+		<key>SkipLanguageAndLocale</key> 
+		<true/>
+		<!-- list of Setup Assistant panes to skip -->
+		<!-- see `cfgutil help prepare` for list of skipable panes -->
+		<key>Skip</key> 
+		<array>
+			<string>skip-all</string>
+		</array>
+	</dict>
+	<key>Reporting</key>
+	<dict>
+		<key>Slack</key> 
+		<dict>
+			<key>name</key>
+			<string>{name}</string>
+			<key>channel</key>
+			<string>{channel}</string>
+			<key>url</key>
+			<string>{url}</string>
+		</dict>
+	</dict>
+	<key>Devices</key>
+	<dict>
+		<key>managed</key>
+		<array>
+			<!-- List of managed device serial numbers -->
+			<string>{SN1}</string>
+			<string>{SN2}</string>
+			<string>{SN3}</string>
+		</array>
+		<!-- Whether or not to automatically manage new devices -->
+		<key>AutoDiscover</key>
+		<true/>
+	</dict>
+	<key>Network</key>
+	<dict>
+		<!-- whether or not to attempt to use tethering -->
+		<key>tethered</key> 
+		<true/>
+		<!-- fallback for non-tethered devices -->
+		<key>wifi</key> 
+		<dict>
+			<!-- basename for WiFi configuration profile -->
+			<key>profile</key> 
+			<string>{profilename}</string>
+			<!-- remove WiFi profile after enrollment -->
+			<key>remove</key> 
+			<true/>
+		</dict>
+	</dict>
+	<key>Images</key>
+	<dict>
+		<key>InProgress</key> 
+		<string>alert.png</string>
+		<key>Failure</key> 
+		<string>alert.png</string>
+		<key>Background</key> 
+		<string>background.png</string>
+		<key>Locked</key> 
+		<string>alert.png</string>
+	</dict>
+	<key>Tasks</key>
+	<array>
+		<string>erase</string>
+		<string>supervise</string>
+		<string>background</string>
+		<string>apps</string>
+	</array>
+</dict>
+</plist>
