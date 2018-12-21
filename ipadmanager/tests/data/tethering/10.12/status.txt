@@ -2,21 +2,33 @@
     "Paired Devices" =     (
                 {
             "Check In Pending" = No;
-            "Check In Retry Attempts" = 0;
-            "Checked In" = No;
-            "Device Location ID" = 336592896;
+            "Check In Retry Attempts" = 4;
+            "Checked In" = Yes;
+            "Device Location ID" = 337641472;
             "Device Name" = "test-ipad-pro";
             "Serial Number" = DMPVAA00J28K;
-            Tethered = No;
+            Tethered = Yes;
+            Paired = Yes;
         },
                 {
             "Check In Pending" = No;
+            "Check In Retry Attempts" = 0;
+            "Checked In" = No;
+            "Device Location ID" = 341835776;
+            "Device Name" = "test-ipad-1";
+            "Serial Number" = DMQX7000JF8J;
+            Tethered = No;
+            Paired = No;
+        },
+                {
+            "Check In Pending" = Yes;
             "Check In Retry Attempts" = 3;
-            "Checked In" = Yes;
-            "Device Location ID" = 337641472;
+            "Checked In" = No;
+            "Device Location ID" = 336592896;
             "Device Name" = "test-ipad-2";
             "Serial Number" = DMPWAA01JF8J;
             Tethered = Yes;
+            Paired = Yes;
         }
     );
     "Primary Interface" =     {

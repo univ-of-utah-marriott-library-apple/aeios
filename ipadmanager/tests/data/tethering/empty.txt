@@ -1,0 +1,1 @@
+{"name":"status","result":{"Primary Interface":{"IP Address":"192.1.1.2","BSD Name":"en0","User Readable":"Ethernet","Wired":true,"Mbps":1000},"Device Roster":[]}}

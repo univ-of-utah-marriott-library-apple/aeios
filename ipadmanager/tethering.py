@@ -12,6 +12,7 @@ import re
 import subprocess
 import time
 import plistlib
+import json
 
 __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
@@ -21,7 +22,7 @@ __version__ = '1.2.0'
 __url__ = None
 __description__ = 'functions for iOS device tethering'
 
-ENABLED = False
+ENABLED = None
 
 class Error(Exception):
     pass
@@ -30,16 +31,12 @@ class Error(Exception):
 class TetheringError(Error):
     pass
 
-def _old_tetherator(log, arg, output=True):
+
+def _old_tetherator(log, arg, output=True, **kwargs):
     '''get old style output from `AssetCacheTetheratorUtil`
     if output=False, only the returncode is returned
     '''
-    cmd = ['/usr/bin/AssetCacheTetheratorUtil', arg]
-    log.debug("> {0}".format(" ".join(cmd)))
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
-                              stderr=subprocess.PIPE)
-    # AssetCacheTetheratorUtil prints information to STDERR
-    out, err = p.communicate()
+    p, out = assetcachetetheratorutil(log, arg, json=False, **kwargs)
     if output:
         # modify the output of old `AssetCacheTetheratorUtil` to be 
         # what is returned in the newer version
@@ -48,10 +45,13 @@ def _old_tetherator(log, arg, output=True):
                    'Check In Retry Attempts': 'Check In Attempts',
                    'Device Location ID': 'Location ID'}
         modified = []
-        for device in _parse_tetherator_status(log, err.rstrip()):
+        for device in _parse_tetherator_status(log, out.rstrip()):
             info = {v:device[k] for k,v in changed.items()}
             info.update({k:device[k] for k in universal})
+            # hack for paired (this might be a bad idea overall)
+            info['Paired'] = device.get('Paired')
             modified.append(info)
+            
         return {'Device Roster': modified}
     else:
         return p.returncode
@@ -125,17 +125,25 @@ def _parse_tetherator_status(log, status):
     # return list of all device dicts
     return tethered_devices
 
-def _tetherator(log, arg, output=True):
-    '''get output from `AssetCacheTetheratorUtil` in 10.13+
-    if output=False: returns the exit status
-    '''
-    cmd = ['/usr/bin/AssetCacheTetheratorUtil', '--json', arg]
+def assetcachetetheratorutil(log, arg, json=True):
+    cmd = ['/usr/bin/AssetCacheTetheratorUtil']
+    if json:
+        cmd += ['--json']
+    cmd += [arg]
     log.debug("> {0}".format(" ".join(cmd)))
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
                               stderr=subprocess.PIPE)
     out, err = p.communicate()
+    # older version of command prints output to stderr
+    return (p, out) if json else (p, err)
+
+def _tetherator(log, arg, output=True, **kwargs):
+    '''get output from `AssetCacheTetheratorUtil` in 10.13+
+    if output=False: returns the exit status
+    '''
+    p, out = assetcachetetheratorutil(log, arg, json=True, **kwargs)
     if output:
-        return json.loads(out.rstrip())
+        return json.loads(out.rstrip())['result']
     else:
         return p.returncode
 
@@ -172,9 +180,12 @@ def tetherator():
     #       ... everything seems to point to the wrapped function
     #           and I'm not quite sure how, or if this will bite me
     # all *args and **kwargs are passed to the decorated function
-    return _decorated()
 
-  
+    #return _decorated()
+    
+    # NOTE: apparently nothing in this function is ever run (which
+    #       is why the call above didn't raise UnboundLocalError)
+    pass
 
 ## additional tools
 
@@ -190,7 +201,7 @@ def wait_for_devices(log, previous, timeout=10, poll=2):
     count = timeout / poll
 
     while count < timeout:
-        current = devices(log)
+        current = devices(log, **kwargs)
         appeared = []
         
         for device in current:
@@ -275,40 +286,43 @@ def stop(log):
     '''Stops tethered-caching (requires root)
     (Not supported in 10.13+)
     '''
-    if not enabled(refresh=False):
+    if not enabled(log, refresh=False):
         log.warn("tethering services not running")
-        return
+
     log.debug("stopping tethering services")
     tethered_caching(log, '-k')
     log.debug("successfully stopped tethering!")
 
-def enabled(log, refresh=True):
+def enabled(log, refresh=True, **kwargs):
     '''Returns True if device Tethering is enabled, else False
     '''
     global ENABLED
     if refresh or ENABLED is None:
-        returncode = tetherator(log, 'isEnabled', output=False)
-        ENABLED = True if returncode == 0 else False
+        retcode = tetherator(log, 'isEnabled', output=False, **kwargs)
+        ENABLED = True if retcode == 0 else False
     return ENABLED
 
-def devices(log):
+def devices(log, **kwargs):
     '''shortcut function returning list of all devices found by
     tetherator()
     '''
-    return tetherator(log, 'status')['Device Roster']
+    return tetherator(log, 'status', **kwargs)['Device Roster']
 
-def device_is_tethered(log, sn):
+def device_is_tethered(log, sn, **kwargs):
     '''Returns True if device with specified serial number is tethered
     '''
-    return devices_are_tethered(log, [sn])
+    if not sn:
+        raise Error("no device specified")
+    return devices_are_tethered(log, [sn], **kwargs)
 
-def devices_are_tethered(log, sns, strict=False):
+def devices_are_tethered(log, sns, strict=False, **kwargs):
     '''Use list of devices serial numbers to determine
     returns True if all specified devices are tethered
     '''
-    if not enabled(log, refresh=False):
+    if not enabled(log, refresh=False, **kwargs):
         raise Error("tethering is not enabled")
 
+    info = {d['Serial Number']:d for d in devices(log, **kwargs)}
     _tethered = True
     missing = []
     for sn in sns:
@@ -350,7 +364,5 @@ def devices_are_tethered(log, sns, strict=False):
     
     return all_tethered
 
-      
 if __name__ == '__main__':
     pass
-
