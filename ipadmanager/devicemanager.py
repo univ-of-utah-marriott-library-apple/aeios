@@ -11,12 +11,10 @@ from tasklist import TaskList
 from device import Device, DeviceError
 from appmanager import AppManager
 from actools import adapter, cfgutil
+import reporting
 import tethering
 
-try:
-    from management_tools import slack
-except ImportError:
-    slack = None
+# import logging
 
 '''Collection of tools for managing and automating iOS devices
 '''
@@ -136,6 +134,9 @@ __all__ = [
 #   - added exception handling for cfgutil.FatalError (2.2.0)
 #   - trying to figure out why random errors started occurring on
 #     iOS 12.1 cfgutil 2.7.1(444)
+# 2.3.0:
+#   - adaptations for tethering 1.3.0
+#       - more forgiving when non-tethered devices attempt to enroll
 
 class Error(Exception):
     pass
@@ -152,90 +153,174 @@ class StoppedError(Error):
         return "STOPPED: " + str(self.message)
 
 
-class Slackbot(object):
-    '''Null Wrapper for management_tools.slack
+class DeviceList(list):
     '''
-    def __init__(self, info, logger=None):
-        if not logger:
-            logger = logging.getLogger(__name__)
-            logger.addHandler(logging.NullHandler())
-        self.log = logger
-        try:
-            # TO-DO: name could be dynamic
-            self.name = info['name']
-            self.channel = info['channel']
-            self.url = info['url']
-            self.bot = slack.IncomingWebhooksSender(self.url, 
-                               bot_name=self.name, channel=self.channel)
-            self.log.info("slack channel: {0}".format(self.channel))
-        except AttributeError as e:
-            self.log.error("slack tools not installed")
-            self.bot = None            
-        except KeyError as e:
-            self.log.error("missing slack info: {0}".format(e))
-            self.bot = None
+    '''
+    def ecids(self):
+        return [x.ecid for x in self]
     
-    def send(self, msg):
-        try:
-            self.bot.send_message(msg)
-        except AttributeError:
-            self.log.debug("slack: unable to send: {0}".format(msg))
-            pass
+    def serialnumbers(self):
+        return [x.serialnumber for x in self]
+    
+    def udids(self):
+        return [x.udid for x in self]
+    
+    def names(self):
+        return [x.name for x in self]
+
+
+class DeviceListSingleton(object):
+    '''Either a class to handle various types of devices (essentially
+    a list wrapper) (probably best)
+    OR a pseudo-singleton object that is actively updated as device state
+    changes
+    '''
+    def __init__(self, config):
+        self.config = config
+        self._lookup = self.config.setdefault('devices', {})
+        self.devices = []
+        self._list()
+
+    def _list(self):
+        # attempt to keep listing down to once per 30 seconds
+        now = datetime.now()
+        _stale = now - timedelta(seconds=30)
+        if not self.devices or self._refreshed < _stale:        
+            logging.debug("refreshing device list")
+            self._refreshed = now
+            self.devices = cfgutil.list(log=logging)
+        return self.devices
+        
+    def supervised(self, key=None):
+        pass
+
+    def erased(self, key=None):
+        pass
+    
+    def available(self, key=None):
+        pass
+    
+    def tethered(self, key=None):
+        pass
+    
+    def verified(self, key=None):
+        pass
+    
+    def quarantined(self, key=None):
+        pass
+
+    def managed(self, key=None):
+        pass
+        
+    def ecids(self):
+        pass
+    
+    def names(self):
+        pass
+    
+    def serialnumbers(self):
+        pass
+
+
+class Dossier(object):
+    '''a set of papers containing detailed information about a person or 
+    subject
+    '''
+    pass
+
+## checklist: register, registry, roster, catalog, agenda, docket
+
+class Docket(object):
+    '''definition: a document or label listing the contents of a package
+    '''
+    pass
+    
+
+class Clerk(object):
+    '''definition: one employed to keep records or accounts
+    '''
+    def __init__(self):
+        self.docket = Docket()
+
+
+class Validator(object):
+    '''class to handle task completion and validation
+    '''
+    def __init__(self):
+        pass
+
+
+# Experimental Decorator
+def interuptable(func):
+    # don't know how this will work with self
+    def wrapper(*args, **kwargs):
+        if self.stopped:
+            raise StoppedError(func.__name__ + " was stopped")
+        return func(*args, **kwargs)
+    return wrapper
 
 
 class DeviceManager(object):
-    
-    def __init__(self, id, logger=None, **kwargs):
+    '''Class for managing multiple iOS devices
+    '''
+    def __init__(self, id='edu.utah.mlib.ipad', logger=None, **kwargs):
+        # kwargs passed to config.Manager()
+
         if not logger:
             logger = logging.getLogger(__name__)
             logger.addHandler(logging.NullHandler())
         self.log = logger
+        ## this would be really nice if it works
+        # self.log = logging
 
-        self.lock = config.FileLock('/tmp/ipad-manager', timeout=5)
-        c_id = "{0}.manager".format(id)
-        self.config = config.Manager(c_id, **kwargs)
-        self.file = self.config.file
+        self.lock = config.FileLock('/tmp/ipadmanager', timeout=5)
+        self.config = config.Manager("{0}.manager".format(id), **kwargs)
+        self.resources = os.path.dirname(self.config.file)
+
+        self._devicepath = os.path.join(self.resources, 'devices')
+
         try:
             self.config.read()
-        except config.Error:
-            self.log.error("failed to load: {0}".format(self.file))
+        except config.Error as e:
+            self.log.error(e)
             self.config.write({})
-            
-        self.file = self.config.file
-        location = os.path.dirname(self.file)
-        self._devicepath = os.path.join(location, 'devices')
+        
+
         try:
             os.mkdir(self._devicepath)
         except OSError as e:
-            if e.errno != 17 or not os.path.isdir(self._devicepath):
+            # re-raise errors if not EEXIST or 
+            if e.errno != 17 and not os.path.isdir(self._devicepath):
+                self.log.error(e)
                 raise
 
-        # self.log.debug("config: {0}".format(self.record))
-        slack = self.config.get('slack', {})
-        # self.log.debug("slack info: {0}".format(slack))
-        self.slackbot = Slackbot(slack, logger=self.log)
+        reporting = self.config.get('Reporting', {'Slack': {}})
+        self.report = reporting.reporterFromSettings(reporting)
 
-        self.task = TaskList(id, path=location, logger=self.log)
-        self.apps = AppManager(id, path=location, logger=self.log)
+        self.task = TaskList(id, path=self.resources, logger=self.log)
+        self.apps = AppManager(id, path=self.resources, logger=self.log)
 
-        self._lookup = self.config.setdefault('devices', {})
+        self._lookup = self.config.setdefault('Devices', {})
         self.idle = self.config.setdefault('idle', 300)
-        _quarantine = self.config.setdefault('quarantine', [])
-        self._quarantined = set(_quarantine)
+        # _quarantine = self.config.setdefault('quarantine', [])
+        # self._quarantined = set(_quarantine)
         
-        _imagedir = os.path.join(location, 'images')
-        self._images = self.config.get('images', _imagedir)
+        _imagedir = os.path.join(self.resources, 'images')
+        self._images = self.config.get('Images', _imagedir)
 
-        _authdir = os.path.join(location, 'supervision')
-        self._supervision = self.config.get('supervision', _authdir)
+        self._profiles = os.path.join(self.resources, 'profiles')
+
+        _authdir = os.path.join(self.resources, 'supervision')
+        self._supervision = self.config.get('Supervision', _authdir)
 
         self._device = {}
         self._erased = []
         self._list = None
         self._auth = None
         self._checkin = []
-        self._cfgutillog = os.path.join(location,'log/cfgexec.log')
+        self._cfgutillog = os.path.join(self.resources, 'log/cfgexec.log')
 
+    # TO-DO: remove?
     @property
     def record(self):
         return self.config.read()                
@@ -274,24 +359,20 @@ class DeviceManager(object):
         # self.log.debug("checkedin: {0}".format(_checked_in))
         return _checked_in
         
+    # device qualifier
     def available(self, ecids=False):
         '''Returns list of all devices (or device ECID's) that are
         currently checked in
         '''
-        devices = self.findall([i['ECID'] for i in self.devicelist()])
+        devices = DeviceList()
+        _ecids = [i['ECID'] for i in self.devicelist()]
+        for d in self.findall(_ecids)
+            devices.append(d)
         if ecids:
-            return [d.ecid for d in devices]
+            return devices.ecids()
         return devices
 
-    def unavailable(self, ecids=False):
-        '''Returns list of all devices (or device ECID's) that are
-        currently checked out
-        '''
-        devices = self.findall(exclude=self.available())
-        if ecids:
-            return [d.ecid for d in devices]
-        return devices
-
+    # device based action
     def findall(self, ecids=None, exclude=[]):
         '''returns list of Device objects for specified ECIDs
         '''
@@ -302,20 +383,23 @@ class DeviceManager(object):
             ecids = self._lookup.keys()
 
         try:
-            devices = [self.device(x) for x in ecids 
-                           if x not in exclude]
+            # targets = [x for x in ecids if x not in exclude]
+            # devices = DeviceList(map(lambda d: self.device(d), targets))
+            devices = DeviceList([self.device(x) for x in ecids 
+                           if x not in exclude])
         except:
             self.log.error("failed to find devices")
             self.log.debug("attempting to recover...")
             # an error can be thrown if findall() is called before
             # a device record has been created
-            devices = []
+            devices = DeviceList()
             for info in self.devicelist():
                 ecid = info['ECID']
                 if ecid in ecids:
                     devices.append(self.device(ecid, info))
         return devices
             
+    # device object
     def device(self, ecid, info={}):
         '''Returns Device object from ECID
         '''
@@ -323,12 +407,15 @@ class DeviceManager(object):
         try:    
             return self._device[ecid]
         except KeyError:
+            # self.log.debug("no cached device record")
             pass        
 
         # initialize device object from disk, and cache it
         try:
             # use the lookup table to translate the ECID -> UDID
             udid = self._lookup[ecid]
+            _device = Device(udid, info, path=self._devicepath)
+            self._device[ecid] = _device
             _device = Device(udid, info, path=self._devicepath)
             self._device[ecid] = _device
             return _device
@@ -355,6 +442,7 @@ class DeviceManager(object):
         return _device
                                
     # not sure if this should be changed to work as callback
+    # Not in use
     def supervised(self, device, cfgresult):
         info = cfgresult.get(device.ecid)
         _supervised = info.get('isSupervised', False)
@@ -384,9 +472,9 @@ class DeviceManager(object):
             smsg = "new user apps: {0}".format(userapps)
             msg = "NEW: {0}: {1}".format(device.name, smsg)
             self.log.info(msg)
-            self.slackbot.send(msg)
+            self.report.send(msg)
 
-    # Experimental
+    # Experimental # should be removed from release
     def _new_apps_callback(self, ecids, cfgresult):
         '''Use the Appmanager to find and report new, user-installed 
         apps using slack
@@ -415,19 +503,20 @@ class DeviceManager(object):
         if new_apps:
             msg = "NEW USER APPS: {0}: {1}".format(list(new_apps))
             self.log.info(msg)
-            self.slackbot.send(msg)
+            self.report.send(msg)
 
+    
     def devicelist(self, refresh=False):        
         '''Returns list of Device objects using cfgutil.list()
         '''
         # attempt to keep listing down to once per 30 seconds
         now = datetime.now()
         _stale = now - timedelta(seconds=30)
-        _listed = self.config.get('listed')
+        _listed = self.config.get('lastListed')
         if refresh or not self._list or _listed < _stale:        
             self.log.debug("refreshing device list")
             self._list = cfgutil.list(log=self.log)
-            self.config.update({'listed': now})
+            self.config.update({'lastListed': now})
 
         return self._list
 
@@ -440,23 +529,38 @@ class DeviceManager(object):
         return True
 
     def check_network(self, devices):    
-        if not tethering.enabled(self.log):
+        _use_tethering = True
+        if not tethering.enabled():
             self.log.error("tethered-caching wasn't enabled...")
-            tethering.restart(self.log, timeout=20)
-    
-        serialnumbers = [d.serialnumber for d in devices]
-        tethered = tethering.devices_are_tethered(self.log, 
-                                                  serialnumbers)
-        timeout = datetime.now() + timedelta(seconds=30)
-        while not tethered:
-            time.sleep(5)
-            tethered = tethering.devices_are_tethered(self.log, 
-                                                      serialnumbers)
-            if datetime.now() > timeout:
-                break
+            try:
+                tethering.restart(timeout=30)
+            except tethering.Error as e:
+                self.log.error(e)
+                _use_tethering = False
+
+        if _use_tethering:
+            sns = devices.serialnumbers()
+            tethered = tethering.devices_are_tethered(sns)
+            timeout = datetime.now() + timedelta(seconds=60)
+            while not tethered:
+                time.sleep(5)
+                tethered = tethering.devices_are_tethered(sns)
+                if datetime.now() > timeout:
+                    self.log.error("timed out waiting for devices")
+                    break
                 
-        if not tethered:
-            tethering.restart(self.log, timeout=20)
+            if not tethered:
+                try:
+                    # this will have to be removed eventually
+                    tethering.restart(timeout=20)
+                    return
+                except tethering.Error as e:
+                    self.log.error(e)
+        else:
+            # too hidden for my liking, but whatever
+            wifi = os.path.join(self.profiles, 'tmpWifi.mobileconfig')
+            tethering.install_wifi_profile(devices.ecids(), wifi)
+
 
     def checkin(self, info, verifying=False):
         '''
@@ -466,6 +570,7 @@ class DeviceManager(object):
         if self.stopped:
             self.waitfor(device, 'restart')                
 
+        # should be managed by the MDM
         if device.name.startswith('iPad'):
             name = "{0} ({1})".format(device.name, device.ecid)
         else:
@@ -622,6 +727,8 @@ class DeviceManager(object):
 
         return result
 
+    #TO-DO: decorator for suspended/stopped
+    @interuptable
     def erase(self, devices):
         '''Erase specified devices and mark them for preparation
         '''
@@ -646,7 +753,7 @@ class DeviceManager(object):
             if "complete the activation process" in e.message:
                 err = "unable to erase activation locked device"
                 self.log.error(err)
-                self.slackbot.send(err)
+                self.report.send(err)
                 self.lockdevices(e.affected)
                 self.task.erase(e.unaffected)
             else:
@@ -680,6 +787,8 @@ class DeviceManager(object):
         self.task.add('restart', erased)
         self.stop(reason='restart')
     
+    #TO-DO: decorator for suspended/stopped
+    @interuptable
     def prepare(self, devices):
         if self.stopped:
             raise StoppedError("prepare was stopped")
@@ -731,12 +840,14 @@ class DeviceManager(object):
             self.task.prepare(failed)
             self.task.installapps(prepared)
             prepared_devices = self.findall(prepared)
-            names = [str(d) for d in prepared_devices]
+            names = prepared_devices.names()
             self.log.info("successfully prepared: {0}".format(names))
             for device in prepared_devices:
                 device.enrolled = datetime.now()
             self.set_background(prepared_devices, 'alert')
 
+    #TO-DO: decorator for suspended/stopped
+    @interuptable
     def installapps(self, devices):
         if self.stopped:
             raise StoppedError("no apps were installed")
@@ -804,7 +915,9 @@ class DeviceManager(object):
         '''needs to be re-adapted to new layout
         '''
         # IDEA: another class for listing types of devices
-        # self.devices.connected
+        #   self.devices.connected
+        #   self.devices.available
+        #   self.devices.supervised
         if not devices:
             self.log.error("background: no devices specfied")
             return
@@ -845,51 +958,6 @@ class DeviceManager(object):
             self.log.error("no image for: {0}".format(e))
             return
 
-    def remove_temporary_profiles(self, udids):
-        '''Currently unused
-        remove any configuration profiles that start with 'tmp'
-        Designed to remove the WiFi profile installed with the blueprint
-        '''
-        if not udids:
-            self.log.debug("no UDIDs were specified")
-            return
-        
-        self.log.info("checking for temporary configuration profiles")
-        records = self.findall(udids)
-        ecids = [r.read('ECID') for r in records]
-        configProfiles = ['get', 'configurationProfiles']
-        cfgoutput = cfgutil(self.log, ecids, configProfiles)
-
-        for device in records:
-            ecid = device.read('ECID')
-            profiles = cfgoutput[ecid]
-            if not profiles:
-                err = "no profiles were found for device: {0}"
-                self.log.error(err.format(device.name))
-                # device should have the MDM profile
-                device.failed('missing MDM profile')
-                continue
-            else:
-                msg = "{0}: profiles: {1}".format(device.name, profiles)
-                self.log.debug(msg)
-        
-            for profile in profiles['configurationProfiles']:
-                pname = profile['displayName']
-                # remove any profile that name starts with 'tmp'
-                if pname.lower().startswith('tmp'):
-                    self.log.info("removing profile: {0}".format(pname))
-                    id = profile['identifier']
-                    removal = ['remove-profile', id]
-                    auth = self.authorization()
-                    try:
-                        cfgutil(self.log, [ecid], removal, auth)
-                    except CfgutilError:
-                        reason = 'removing temporary profile: {0}'
-                        device.failed(reason.format(pname))
-                else:
-                    msg = "leaving profile installed: {0}".format(pname)
-                    self.log.debug(msg)
-
     @property
     def stopped(self):
         return self.config.get('stopped', False)
@@ -909,6 +977,23 @@ class DeviceManager(object):
         self.log.error("STOPPED")
         raise StoppedError("Hold the press!")
 
+    # experimental
+    def suspend(self):
+        '''suspend automation (system shutdown)
+        '''
+        pass
+    
+    # experimental
+    def resume(self):
+        '''resume automation (after system shutdown)
+        '''
+        pass
+
+    @property
+    def suspended(self):
+        pass
+        
+    #TO-DO: remove
     @property
     def quarantined(self):
         _more = self.config.get('quarantine', [])
@@ -917,13 +1002,14 @@ class DeviceManager(object):
 
         return list(self._quarantined)
 
+    #TO-DO: remove
     def quarantine(self, ecids=[], task=None):
         if not ecids:
             self.log.debug("no devices to quarantine")
             return
         names = [str(d) for d in self.findall(ecids)]
         msg = "quarantining devices: {0}".format(names)
-        self.slackbot.send(msg)
+        self.report.send(msg)
         self.log.error(msg)
         # quarantine is not persistant, I would like to change that
         self._quarantined = set(ecids).union(self.quarantined)
@@ -1113,8 +1199,10 @@ class DeviceManager(object):
         self.config.update({'finished':datetime.now()})
         self.log.debug("finalization completed")
             
+    #TO-DO: decorator for suspended/stopped
     def run(self, ecid=None):
         # keep multiple managers from running simultaneously
+        # will be changed in future version
         with self.lock.acquire(timeout=-1):
             # if ecid is tasked for restart, skip this run
             if ecid and ecid in self.task.list('restart'):
@@ -1123,13 +1211,16 @@ class DeviceManager(object):
                 return
             
             if self.task.alldone():
+                # exit early if no tasks exist
                 self.log.info("all tasks have been completed")
                 self.finalize()
                 return
             else:
+                # log all tasks by name and ECIDs
                 self.log.info("Agenda:")
                 for k,v in self.task.record.items():
                     if v:
+                        # only print tasks that are on the agenda
                         self.log.info("{0}: {1}".format(k,v))
 
             # give lagging devices a chance to catch up
@@ -1137,18 +1228,48 @@ class DeviceManager(object):
             self.run_queries()
 
             devices = self.available()
-            names = [d.name for d in devices]
-            self.log.debug("available: {0}".format(names))
+            self.log.debug("available: {0}".format(devices.names()))
+    
+            ## this is riddled with issues, devices can be erroneously 
+            ## finalized if errors occur
+            # try:
+            #     self.erase(devices)
+            #     self.prepare(devices)
+            #     self.installapps(devices)
+            # except StoppedError as e:
+            #     self.log.info(e)
+            # finally:
+            #     self.finalize()
 
+            ## Pre-Erase actions
+
+            ## Erase devices
             try:
                 self.erase(devices)
+            except StoppedError as e:
+                self.log.info(e)
+                return
+            except Exception as e:
+                self.log.error("unexpected error: {0!s}".format(e))
+
+            ## Prepare devices (least critical step w/ DEP)
+            try:
                 self.prepare(devices)
+            except StoppedError as e:
+                self.log.info(e)
+                return
+            except Exception as e:
+                self.log.error(e)
+
+            try:
                 self.installapps(devices)
             except StoppedError as e:
                 self.log.info(e)
-            finally:
-                self.finalize()
-
+                return
+            except Exception as e:
+                self.log.error(e)
+            
+            self.finalize()
 
 if __name__ == '__main__':
     pass
