@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
@@ -13,16 +12,22 @@ import subprocess
 import time
 import plistlib
 import json
+import logging
 
 __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
-__copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
+__copyright__ = "Copyright(c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '1.2.0'
+__version__ = '1.4.0'
 __url__ = None
 __description__ = 'functions for iOS device tethering'
 
 ENABLED = None
+
+try:
+    logger = logging.getLogger(__name__)
+except:
+    logger = logging
 
 class Error(Exception):
     pass
@@ -32,11 +37,11 @@ class TetheringError(Error):
     pass
 
 
-def _old_tetherator(log, arg, output=True, **kwargs):
+def _old_tetherator(arg, output=True, **kwargs):
     '''get old style output from `AssetCacheTetheratorUtil`
     if output=False, only the returncode is returned
     '''
-    p, out = assetcachetetheratorutil(log, arg, json=False, **kwargs)
+    p, out = assetcachetetheratorutil(arg, json=False, **kwargs)
     if output:
         # modify the output of old `AssetCacheTetheratorUtil` to be 
         # what is returned in the newer version
@@ -45,7 +50,7 @@ def _old_tetherator(log, arg, output=True, **kwargs):
                    'Check In Retry Attempts': 'Check In Attempts',
                    'Device Location ID': 'Location ID'}
         modified = []
-        for device in _parse_tetherator_status(log, out.rstrip()):
+        for device in _parse_tetherator_status(out.rstrip()):
             info = {v:device[k] for k,v in changed.items()}
             info.update({k:device[k] for k in universal})
             # hack for paired (this might be a bad idea overall)
@@ -56,7 +61,7 @@ def _old_tetherator(log, arg, output=True, **kwargs):
     else:
         return p.returncode
 
-def _parse_tetherator_status(log, status):
+def _parse_tetherator_status(status):
     '''re-write of parse_tetherator (more complete parser)
     Does its best to convert output of `AssetCacheTetheratorUtil status`
     into a python dictionary regardless of keys and values.
@@ -68,28 +73,28 @@ def _parse_tetherator_status(log, status):
     stripped = re.sub(r'\n|\s{4}', '', status)
 
     # get dictionary of all devices as a string:
-    #   '{"k" = v; "k2" = v2; "k3" = "v3";}, {...}, ...'
+    #   e.g. '{"k" = v; "k2" = v2; "k3" = "v3";}, {...}, ...'
     devices_string = re.search(r'\((.*)\)', stripped).group(1)
 
     # split devices_string into list of individual dictionary strings:
-    #   ['{"k" = v; "k2" = v2; "k3" = "v3"}', '{...}', ...]
+    #   e.g. ['{"k" = v; "k2" = v2; "k3" = "v3"}', '{...}', ...]
     dict_strings = re.findall(r'\{.+?\}', devices_string)
-    log.debug("found {0} device(s)".format(len(dict_strings)))
+    logger.debug("found {0} device(s)".format(len(dict_strings)))
 
     tethered_devices = []    
     for d_str in dict_strings:
         # split each dictionary string into key-value pairs:
-        # ['{"k" = "v"', '"k2" = v2', '"k3" = "v3"', ..., '}']
+        # e.g. ['{"k" = "v"', '"k2" = v2', '"k3" = "v3"', ..., '}']
         # split on ';' and skip the last value (always '}')
         tethered_device = {}
         for kvp in d_str.split(';')[0:-1]:
             # split key-value pairs 
-            # ('{"k"','v'), ('"k2"','v2'), or ('"k3"','"v3"'), etc.
+            # e.g. ('{"k"','v'), ('"k2"','v2'), or ('"k3"','"v3"'), etc.
             try:
                 raw_k,raw_v = kvp.split(" = ")
             except ValueError:
-                log.error("unable to parse: {0!r}".format(d_str))
-                log.error("key-value pair: {0!r}".format(kvp))
+                logger.error("unable to parse: {0!r}".format(d_str))
+                logger.debug("key-value pair: {0!r}".format(kvp))
                 raise
             try:
                 # exclude quotations (if any) from each key
@@ -97,9 +102,9 @@ def _parse_tetherator_status(log, status):
                 k = re.match(r'^\{?"?(.+?)"?$', raw_k).group(1)
             except AttributeError:
                 # all information
-                log.error("unable to parse: {0!r}".format(d_str))
-                log.error("key-value pair: {0!r}".format(kvp))
-                log.error("unexpected key: {0!r}".format(raw_k))
+                logger.debug("unable to parse: {0!r}".format(d_str))
+                logger.debug("key-value pair: {0!r}".format(kvp))
+                logger.error("unexpected key: {0!r}".format(raw_k))
                 raise
             try:
                 # exclude quotations (if any), convert various types
@@ -113,9 +118,9 @@ def _parse_tetherator_status(log, status):
                     v = True if v == 'Yes' else False
             except AttributeError:
                 # all information
-                log.error("unable to parse: {0!r}".format(d_str))
-                log.error("key-value pair: {0!r}".format(kvp))
-                log.error("unexpected value: {0!r}".format(raw_v))
+                logger.error("unable to parse: {0!r}".format(d_str))
+                logger.debug("key-value pair: {0!r}".format(kvp))
+                logger.debug("unexpected value: {0!r}".format(raw_v))
                 raise
             # add each parsed key and value to dict
             tethered_device[k] = v
@@ -125,23 +130,23 @@ def _parse_tetherator_status(log, status):
     # return list of all device dicts
     return tethered_devices
 
-def assetcachetetheratorutil(log, arg, json=True):
+def assetcachetetheratorutil(arg, json=True):
     cmd = ['/usr/bin/AssetCacheTetheratorUtil']
     if json:
         cmd += ['--json']
     cmd += [arg]
-    log.debug("> {0}".format(" ".join(cmd)))
+    logger.debug("> {0}".format(" ".join(cmd)))
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
                               stderr=subprocess.PIPE)
     out, err = p.communicate()
     # older version of command prints output to stderr
     return (p, out) if json else (p, err)
 
-def _tetherator(log, arg, output=True, **kwargs):
+def _tetherator(arg, output=True, **kwargs):
     '''get output from `AssetCacheTetheratorUtil` in 10.13+
     if output=False: returns the exit status
     '''
-    p, out = assetcachetetheratorutil(log, arg, json=True, **kwargs)
+    p, out = assetcachetetheratorutil(arg, json=True, **kwargs)
     if output:
         return json.loads(out.rstrip())['result']
     else:
@@ -165,8 +170,7 @@ def dynamic(func):
     except subprocess.CalledProcessError:
         # use the older version
         _func = _old_tetherator
-    # I'll be honest, this is witchcraft...
-    # TO-DO: convert from witchcraft to science
+    # I'll be honest, this is witchcraft... see tetherator()
     def wrapper(*args, **kwargs):
         return _func(*args, **kwargs)
     return wrapper
@@ -189,19 +193,19 @@ def tetherator():
 
 ## additional tools
 
-def wait_for_devices(log, previous, timeout=10, poll=2):
+def wait_for_devices(previous, timeout=10, poll=2):
     '''compare items in the previous device list with devices that
     appear
     '''
 
-    log.info("waiting for devices to reappear")
+    logger.info("waiting for devices to reappear")
     prev_sn = [d['Serial Number'] for d in previous]
     found = []
     tethered = []
     count = timeout / poll
 
     while count < timeout:
-        current = devices(log, **kwargs)
+        current = devices(**kwargs)
         appeared = []
         
         for device in current:
@@ -220,13 +224,13 @@ def wait_for_devices(log, previous, timeout=10, poll=2):
                 found.append(sn)
 
             if device['Checked In']:
-                log.debug("{0} tethered!".format(name))
+                logger.debug("{0} tethered!".format(name))
                 tethered.append(sn)
         
         # superfluous logging
         if appeared:
             msg = "device(s) appeared: {0}".format(", ".join(appeared))
-            log.debug(msg)
+            logger.debug(msg)
             
         sn_set = set(found + prev_sn)
         # list of items that 
@@ -237,92 +241,92 @@ def wait_for_devices(log, previous, timeout=10, poll=2):
 
         waitmsg = "waiting on {0} device(s)".format(len(waiting))
         waitmsg += ": ({0})".format(", ".join(waiting))
-        log.info(waitmsg)
+        logger.info(waitmsg)
         count += countpoll
         time.sleep(poll)
 
     raise TetheringError("devices never came up: {0}".format(waiting))
 
-def tethered_caching(log, args):
+def tethered_caching(args):
     '''Start or stop tethered-caching
     '''
     _tethered_caching = '/usr/bin/tethered-caching'
     try:
         cmd = ['/usr/bin/sudo', '-n', _tethered_caching, args]
-        log.debug("> {0}".format(" ".join(cmd)))
+        logger.debug("> {0}".format(" ".join(cmd)))
         subprocess.check_call(cmd, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as e:
-        log.error("`{0} {1}`: failed".format(_tethered_caching, args))
-        log.error(e)
+        logger.error("`{0} {1}`: failed".format(_tethered_caching, args))
+        logger.error(e)
         raise Error("tethered-caching failed")    
 
-def restart(log, timeout=30):
+def restart(timeout=30):
     '''Restart tethered-caching (requires root)
     (Not supported in 10.13+)
     '''
-    log.info("restarting tethered caching")
+    logger.info("restarting tethered caching")
     # get current devices before restarting
-    previous = devices(log)
+    previous = devices()
     
-    start(log)
-    log.debug("successfully restarted tethering!")
+    start()
+    logger.debug("successfully restarted tethering!")
 
     if previous:
         try:
-            wait_for_devices(log, previous, timeout=timeout)
+            wait_for_devices(previous, timeout=timeout)
         except TetheringError:
-            log.error("some devices never came back up")
+            logger.error("some devices never came back up")
 
-def start(log):
+def start():
     '''Starts tethered-caching (requires root)
     (Not supported in 10.13+)
     '''
-    log.info("starting tethering services")
-    tethered_caching(log, '-b')
-    log.debug("successfully started tethering!")
+    logger.info("starting tethering services")
+    tethered_caching('-b')
+    logger.debug("successfully started tethering!")
 
-def stop(log):  
+def stop():  
     '''Stops tethered-caching (requires root)
     (Not supported in 10.13+)
     '''
-    if not enabled(log, refresh=False):
-        log.warn("tethering services not running")
+    if not enabled(refresh=False):
+        logger.warn("tethering services not running")
 
-    log.debug("stopping tethering services")
-    tethered_caching(log, '-k')
-    log.debug("successfully stopped tethering!")
+    logger.info("stopping tethering services")
+    tethered_caching('-k')
+    logger.debug("successfully stopped tethering!")
 
-def enabled(log, refresh=True, **kwargs):
+def enabled(refresh=True, **kwargs):
     '''Returns True if device Tethering is enabled, else False
     '''
     global ENABLED
     if refresh or ENABLED is None:
-        retcode = tetherator(log, 'isEnabled', output=False, **kwargs)
+        retcode = tetherator('isEnabled', output=False, **kwargs)
         ENABLED = True if retcode == 0 else False
     return ENABLED
 
-def devices(log, **kwargs):
+def devices(**kwargs):
     '''shortcut function returning list of all devices found by
     tetherator()
     '''
-    return tetherator(log, 'status', **kwargs)['Device Roster']
+    return tetherator('status', **kwargs)['Device Roster']
 
-def device_is_tethered(log, sn, **kwargs):
+def device_is_tethered(sn, **kwargs):
     '''Returns True if device with specified serial number is tethered
     '''
     if not sn:
         raise Error("no device specified")
-    return devices_are_tethered(log, [sn], **kwargs)
+    return devices_are_tethered([sn], **kwargs)
 
-def devices_are_tethered(log, sns, strict=False, **kwargs):
+def devices_are_tethered(sns, strict=False, **kwargs):
     '''Use list of devices serial numbers to determine
     returns True if all specified devices are tethered
     '''
-    if not enabled(log, refresh=False, **kwargs):
+    if not enabled(refresh=False, **kwargs):
         raise Error("tethering is not enabled")
 
-    info = {d['Serial Number']:d for d in devices(log, **kwargs)}
+    info = {d['Serial Number']:d for d in devices(**kwargs)}
     _tethered = True
     missing = []
     for sn in sns:
@@ -336,12 +340,11 @@ def devices_are_tethered(log, sns, strict=False, **kwargs):
 
     if missing:
         err = "missing device(s): {0}".format(missing)
-        log.error(err)
+        logger.error(err)
         if strict:
             raise TetheringError(err)
     
     return _tethered
-
 
     all_tethered =  True
     try:
@@ -349,7 +352,7 @@ def devices_are_tethered(log, sns, strict=False, **kwargs):
         _tethered = [v]
     except KeyError:
         err = "missing device: {0}".format(sn)
-        log.error(err)
+        logger.error(err)
         raise TetheringError(err)
 
     for sn in sns:
@@ -359,7 +362,7 @@ def devices_are_tethered(log, sns, strict=False, **kwargs):
                 all_tethered = False
         except KeyError:
             err = "missing device: {0}".format(sn)
-            log.error(err)
+            logger.error(err)
             raise TetheringError(err)
     
     return all_tethered
