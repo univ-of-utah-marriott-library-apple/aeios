@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.2.0'
+__version__ = '2.3.0'
 __url__ = None
 __description__ = 'Execute commands with `cfgutil`'
 
@@ -67,7 +67,8 @@ __description__ = 'Execute commands with `cfgutil`'
 #   - minor logging changes
 #   - minor changes with Exception types
 #   - modified cfgutil() to raise FatalError with non-zero returncode
-
+# 2.3.0:
+#   - added install_wifi_profile()
 
 TESTING = False
 CFGUTILBIN = '/usr/local/bin/cfgutil'
@@ -222,6 +223,32 @@ def wallpaper(ecids, image, args, auth, **kwargs):
     args.append(image)
 
     return cfgutil('wallpaper', ecids, args, auth, **kwargs)
+
+def install_wifi_profile(ecids, profile, **kwargs):
+    '''install wifi profile on unmanaged devices
+    NOTE:
+        install-profile reports failure, but allows the wifi profile to 
+        be installed regardless 
+    
+    Currently there is no support for checking if the wifi profile was 
+    actually installed
+    
+    '''
+    if not ecids:
+        raise ValueError('no ECIDs specified')
+    if not os.path.exists(profile):
+        raise ValueError("no such profile: {0}".format(profile))
+
+    # dummy auth (not required for a unmanaged device wifi profile)
+    class _faux(object):
+        def args(self):
+            return []
+    try:
+        # incorrectly reports failure 
+        cfgutil('install-profile', ecids, [profile], _faux(), **kwargs)
+    except:
+        pass
+    
         
 def prepareDEP(ecids, **kwargs):
     '''prepare specified ECIDs using DEP
@@ -245,8 +272,10 @@ def cfgutil(command, ecids=[], args=[], auth=None, log=None,
     '''
     if not log:
         import logging
-        log = logging.getLogger(__name__)
-        log.addHandler(logging.NullHandler())
+        try:
+            log = logging.getLogger(__name__)
+        except:
+            log = logging
 
     # build the command
     cmd = [CFGUTILBIN, '--format', 'JSON']
