@@ -26,6 +26,7 @@ Most of setup involves performing one-time task necessary for the automation of 
    - install automation tools
    - 2 additional columns: UDID, ECID
    - VPP Account sign in
+   - Supervision Identity
  - Accessibility Access
    - `/bin/sh`
    - `/Library/Scripts/iPads/ipad_checkout.py`
