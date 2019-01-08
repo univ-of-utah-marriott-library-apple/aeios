@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.3.0'
+__version__ = '2.3.1'
 __url__ = None
 __description__ = 'Execute commands with `cfgutil`'
 
@@ -67,8 +67,11 @@ __description__ = 'Execute commands with `cfgutil`'
 #   - minor logging changes
 #   - minor changes with Exception types
 #   - modified cfgutil() to raise FatalError with non-zero returncode
+#
 # 2.3.0:
 #   - added install_wifi_profile()
+# 2.3.1:
+#   - added Error.ecids property
 
 TESTING = False
 CFGUTILBIN = '/usr/local/bin/cfgutil'
@@ -92,6 +95,7 @@ class Error(Exception):
         self.detail = info.get('Detail', '')
         self.affected = info.get('AffectedDevices', [])
         self.unaffected = info.get('UnaffectedDevices', [])
+        self.ecids = self.affected + self.unaffected
 
     def __str__(self):
         # ["<cmd>: "] + "<msg> (<code>)" + [": devices: <affected>"]
