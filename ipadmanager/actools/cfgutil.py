@@ -207,6 +207,7 @@ def get(keys, ecids, **kwargs):
 def list(*args, **kwargs):
     '''Returns list of attached devices
     '''
+    # TO-DO: this needs to be changed to process a result object
     output = cfgutil('list', *args, fmt='json', **kwargs)
     return [info for info in output['Output'].values()]
 
@@ -340,6 +341,7 @@ def cfgutil(command, ecids=[], args=[], auth=None, log=None,
                   'Output': {}, 'Detail': str(e)}
 
     # pseudo-reverse-compatibility (mostly for cfgutil.list())
+    # NOTE: once list() has been updated, this can be removed
     if fmt and fmt.lower() == 'json':
         return cfgout
 
