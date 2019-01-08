@@ -18,7 +18,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.0.7'
+__version__ = '2.0.8'
 __url__ = None
 __description__ = 'Automate the management of iOS devices'
 
@@ -39,6 +39,8 @@ __description__ = 'Automate the management of iOS devices'
 #  - fixed NameError with StoppedError
 # 2.0.7:
 #  - changed StoppedError to Stopped
+# 2.0.8:
+#  - changed verification
 
 class SignalTrap(object):
     '''Class for trapping interruptions in an attempt to shutdown
@@ -101,9 +103,10 @@ def daemon(logger, path):
 
         if p.poll() is not None:
             p = subprocess.Popen[cmd]
+
         if not manager.stopped:
             try:
-                manager.verify()
+                manager.verify(run=True)
             except Stopped:
                 logger.info("manager was stopped")
             except Exception as e:
