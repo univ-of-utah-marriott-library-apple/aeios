@@ -42,7 +42,8 @@ class Reporter(object):
 class SlackSender(Reporter):
     '''Minimal functionality of management_tools.slack
     '''
-    def __init__(self, url, channel, name):
+    def __init__(self, url, channel, name, log=None):
+        self.log = log if log else logging
         self.url = url
         self.name = name
         self.channel = channel
@@ -55,26 +56,26 @@ class SlackSender(Reporter):
             request = urllib2.Request(self.url, json_str)
             urllib2.urlopen(request)
         except Exception as e:
-            logging.error("{0}: unable to send message".format(e))
+            self.log.error("{0}: unable to send message".format(e))
 
 
 class Slack(Reporter):
     '''
     '''
-    def __init__(self, url, channel, name='ipadmanager'):
+    def __init__(self, url, channel, name='ipadmanager', log=None):
+        self.log = log if log else logging
         self.url = url
         self.channel = channel
         self.name = name
         self.bot = SlackSender(self.url, self.channel, self.name)
-        logging.debug("slack channel: {0}".format(self.channel))
-        logging.debug("slack name: {0}".format(self.name))
+        self.log.debug("slack channel: {0}".format(self.channel))
+        self.log.debug("slack name: {0}".format(self.name))
     
     def send(self, msg):
         try:
             self.bot.send(msg)
         except Exception as e:
-            logging.error(e)
-            logging.error("unable to send message: {0}".format(msg))
+            self.log.error(e)
 
 
 def reporterFromSettings(conf):
