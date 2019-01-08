@@ -18,7 +18,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright(c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '1.4.0'
+__version__ = '1.4.1'
 __url__ = None
 __description__ = 'functions for iOS device tethering'
 
@@ -193,7 +193,7 @@ def tetherator():
 
 ## additional tools
 
-def wait_for_devices(previous, timeout=10, poll=2):
+def wait_for_devices(previous, timeout=10, poll=2, **kwargs):
     '''compare items in the previous device list with devices that
     appear
     '''
