@@ -9,7 +9,7 @@ import signal
 import logging
 
 from management_tools import loggers
-from ipadmanager import DeviceManager, StoppedError
+from ipadmanager import DeviceManager, Stopped
 
 '''Automate the management of iOS devices 
 '''
@@ -18,7 +18,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.0.6'
+__version__ = '2.0.7'
 __url__ = None
 __description__ = 'Automate the management of iOS devices'
 
@@ -37,7 +37,8 @@ __description__ = 'Automate the management of iOS devices'
 # 2.0.6:
 #  - added additional exception handling in daemon()
 #  - fixed NameError with StoppedError
-
+# 2.0.7:
+#  - changed StoppedError to Stopped
 
 class SignalTrap(object):
     '''Class for trapping interruptions in an attempt to shutdown
@@ -103,7 +104,7 @@ def daemon(logger, path):
         if not manager.stopped:
             try:
                 manager.verify()
-            except StoppedError:
+            except Stopped:
                 logger.info("manager was stopped")
             except Exception as e:
                 logger.error("unexpected error: {0!s}".format(e))

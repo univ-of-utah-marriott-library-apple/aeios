@@ -145,6 +145,10 @@ __all__ = [
 #   - re-arranged some functions
 #   - StoppedError -> Stopped
 #   - changed various parts of control flow
+# 2.4.1:
+#   - bugs fixed:
+#        __init__.reporting
+#       replaced all instances of StoppedError with Stopped
 
 class Error(Exception):
     pass
@@ -178,10 +182,10 @@ class DeviceList(list):
         return [x.name for x in self]
 
     def unsupervised(self):
-        return [x for x in self if not x.supervised]
+        return DeviceList([x for x in self if not x.supervised])
 
     def supervised(self):
-        return [x for x in self if x.supervised]
+        return DeviceList([x for x in self if x.supervised])
 
 
 class DeviceManager(object):
@@ -201,7 +205,7 @@ class DeviceManager(object):
         self.resources = os.path.dirname(self.config.file)
         self._devicepath = os.path.join(self.resources, 'devices')
         self._cfgutillog = os.path.join(self.resources, 'log/cfgexec.log')
-        self._profiles = os.path.join(self.resources, 'profiles')
+        self.profiles = os.path.join(self.resources, 'profiles')
         _imagedir = os.path.join(self.resources, 'images')
         _authdir = os.path.join(self.resources, 'supervision')
 
@@ -222,17 +226,17 @@ class DeviceManager(object):
         self.task = TaskList(id, path=self.resources, logger=self.log)
         self.apps = AppManager(id, path=self.resources, logger=self.log)
 
-        reporting = self.config.get('Reporting', {'Slack': {}})
-        self.report = reporting.reporterFromSettings(reporting)
+        _reporting = self.config.get('reporting', {'Slack': {}})
+        self.report = reporting.reporterFromSettings(_reporting)
 
 
-        self._lookup = self.config.setdefault('Devices', {})
+        self._lookup = self.config.setdefault('devices', {})
         self.idle = self.config.setdefault('idle', 300)
         # _quarantine = self.config.setdefault('quarantine', [])
         # self._quarantined = set(_quarantine)
         
-        self._images = self.config.get('Images', _imagedir)
-        self._supervision = self.config.get('Supervision', _authdir)
+        self._images = self.config.get('images', _imagedir)
+        self._supervision = self.config.get('supervision', _authdir)
 
         self._device = {}
         self._erased = []
@@ -257,7 +261,7 @@ class DeviceManager(object):
         if reason:
             self.config.update({'reason':reason})
         self.log.error("STOPPED")
-        raise StoppedError("Hold the press!")
+        raise Stopped("Hold the press!")
             
     def findall(self, ecids=None, exclude=[]):
         '''returns list of Device objects for specified ECIDs
@@ -382,16 +386,20 @@ class DeviceManager(object):
         return True
 
     def check_network(self, devices):    
-        _use_tethering = True
-        if not tethering.enabled():
+        _use_tethering = False
+        if _use_tethering and not tethering.enabled(log=self.log):
             self.log.info("Device Tethering isn't enabled...")
             try:
                 tethering.restart(timeout=30)
             except tethering.Error as e:
                 self.log.error(e)
                 _use_tethering = False
+            except Exception as e:
+                self.log.error("unexpected error occurred: {0!s}".format(e))
+                raise
 
         if _use_tethering:
+            self.log.debug("using tethering")
             sns = devices.serialnumbers()
             tethered = tethering.devices_are_tethered(sns)
             timeout = datetime.now() + timedelta(seconds=60)
@@ -409,10 +417,14 @@ class DeviceManager(object):
                     return
                 except tethering.Error as e:
                     self.log.error(e)
+                    raise
         else:
             # too hidden for my liking, but whatever
+            self.log.debug("using wifi profile")
             wifi = os.path.join(self.profiles, 'tmpWifi.mobileconfig')
-            tethering.install_wifi_profile(devices.ecids(), wifi)
+            cfgutil.install_wifi_profile(devices.ecids(), wifi, 
+                                    log=self.log, file=self._cfgutillog)
+            time.sleep(2)
 
     def checkin(self, info, verifying=False):
         '''process of device attaching
@@ -488,7 +500,7 @@ class DeviceManager(object):
 
         self.log.debug("instructed to wait for: {0}".format(reason))
         if reason != self.config.get('reason'):
-            raise StoppedError("not stopped for: {0}".format(reason))
+            raise Stopped("not stopped for: {0}".format(reason))
 
         # get this device's ecid out of the queue (if it's there)
         self.task.get(reason, only=[device.ecid])
@@ -598,11 +610,10 @@ class DeviceManager(object):
             self.log.error("missing devices tasked for erase")
             self.log.debug("missing: {0}".format(names))
 
-
-
         # update devices before erase
         for device in self.findall(ecids):
             # mark restarting before erase (or will count as checkout)
+            self.log.debug("found device: {0}".format(device.name))
             device.restarting = True
     
         try: 
@@ -647,6 +658,7 @@ class DeviceManager(object):
 
         # task device for preparation
         self.task.add('restart', erased)
+        self.log.debug("device: {0}".format(device.record))
         self.stop(reason='restart')
     
     def supervise(self, devices):
@@ -656,12 +668,11 @@ class DeviceManager(object):
             raise Stopped("skipped device supervision")
 
         # list of device ECID's that need supervision
-        ecids = self.task.prepare(only=devices.unsupervised())
-        # ecids = self.task.prepare(only=[d.ecid for d in devices])
+        ecids = self.task.prepare(only=devices.unsupervised().ecids())                
 
         if not ecids:
             self.log.info("no devices need to be supervised")
-            return devices
+            return
 
         # more logging (doesn't really do anything)
         _missing = self.task.list('prepare')
@@ -711,6 +722,7 @@ class DeviceManager(object):
             self.log.info("successfully prepared: {0}".format(names))
             for device in prepared_devices:
                 device.enrolled = datetime.now()
+                device.supervised = True
             self.set_background(prepared_devices, 'alert')
 
     def installapps(self, devices):
@@ -772,7 +784,7 @@ class DeviceManager(object):
             self._auth = cfgutil.Authentication(cert, key, self.log)    
         return self._auth
 
-    def set_background(self, devices, type):
+    def set_background(self, devices, _type):
         '''needs to be re-adapted to new layout
         '''
         # IDEA: another class for listing types of devices
@@ -786,10 +798,8 @@ class DeviceManager(object):
         if not self._images:
             self.log.error("no images availalbe")
             return
-        
-        # can only set backgrounds for supervised devices
-        ecids = devices.supervised()
-        # ecids = [d.ecid for d in devices if d.enrolled or d.supervised]
+
+        ecids = devices.supervised().ecids()
         if not ecids:
             if devices:
                 self.log.error("can't ajust background on"
@@ -806,12 +816,12 @@ class DeviceManager(object):
         
         args = ['--screen', 'both']
         try:
-            image = images[type]
+            image = images[_type]
             auth = self.authorization()
             result = cfgutil.wallpaper(ecids, image, args, auth, 
                                  log=self.log, file=self._cfgutillog)
             for device in self.findall(result.ecids):
-                device.background = type
+                device.background = _type
         except cfgutil.CfgutilError as e:
             self.log.error("failed to set background: {0}".format(e))
             self.log.debug("unaffected: {0}".format(e.unaffected))
@@ -979,10 +989,9 @@ class DeviceManager(object):
                     retasked_ecids.update(v)
                     self.log.info("{0}: {1}".format(k,v))
         
-        supervised = devices.supervised()
         ## Find devices that need wallpaper changed (supervised only)
-        finished, unfinished = [], []
-        for device in supervised:
+        finished, unfinished = DeviceList(), DeviceList()
+        for device in devices:
             if device.ecid in retasked_ecids:
                 if device.background != 'alert':
                     unfinished.append(device)

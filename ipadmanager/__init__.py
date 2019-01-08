@@ -6,7 +6,7 @@ from actools import cfgutil, adapter
 from device import Device, DeviceError
 from tasklist import TaskList
 from appmanager import AppManager
-from devicemanager import DeviceManager, StoppedError, Slackbot
+from devicemanager import DeviceManager, Stopped
 
 '''Collection of tools for managing and automating iOS devices
 '''
@@ -20,13 +20,12 @@ __url__ = None
 __description__ = ('Collection of tools for managing and automating '
                    'iOS devices')
 __all__ = [
-    'StoppedError',
+    'Stopped',
     'DeviceManager',
     'Device',
     'DeviceError',
     'TaskList',
     'AppManager',
-    'Slackbot',
     'cfgutil',
     'adapter',
     'tethering',

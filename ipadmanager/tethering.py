@@ -261,10 +261,13 @@ def tethered_caching(args):
         logger.error(e)
         raise Error("tethered-caching failed")    
 
-def restart(timeout=30):
+def restart(timeout=30, log=None):
     '''Restart tethered-caching (requires root)
     (Not supported in 10.13+)
     '''
+    if log:
+        global logger
+        logger = log
     logger.info("restarting tethered caching")
     # get current devices before restarting
     previous = devices()
@@ -297,9 +300,13 @@ def stop():
     tethered_caching('-k')
     logger.debug("successfully stopped tethering!")
 
-def enabled(refresh=True, **kwargs):
+def enabled(refresh=True, log=None, **kwargs):
     '''Returns True if device Tethering is enabled, else False
     '''
+    if log:
+        global logger
+        logger = log
+
     global ENABLED
     if refresh or ENABLED is None:
         retcode = tetherator('isEnabled', output=False, **kwargs)
