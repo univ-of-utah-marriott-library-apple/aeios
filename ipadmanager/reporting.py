@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright(c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 __url__ = None
 __description__ = ('Library for reporting events with devicemanager')
 
@@ -86,7 +86,7 @@ def reporterFromSettings(conf):
         name = _slack.get('name')
         return Slack(_slack['url'], _slack['channel'], name)
     except KeyError:
-        class NullReporter(Reporter)
+        class NullReporter(Reporter):
             pass
         return NullReporter()
 
