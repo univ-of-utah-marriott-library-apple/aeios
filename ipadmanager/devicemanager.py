@@ -24,7 +24,7 @@ __email__ = "sam.forester@utah.edu"
 __copyright__ = ("Copyright (c) 2019 "
                  "University of Utah, Marriott Library")
 __license__ = 'MIT'
-__version__ = '2.4.0'
+__version__ = '2.5.0'
 __url__ = None
 __all__ = [
     'DeviceManager', 
@@ -149,6 +149,58 @@ __all__ = [
 #   - bugs fixed:
 #        __init__.reporting
 #       replaced all instances of StoppedError with Stopped
+#
+# 2.5.0:
+# major re-work:
+#   - changed verification mechanism
+#   - managed():
+#       - reserved for future device management checking
+#   - checkin():
+#       - added managed() placeholder
+#       - NOTE: still needs some work
+#       - resets verified property
+#       - run can be skipped (used by verify())
+#   - erase():
+#       - re-worked exception handling (needs to be tested)
+#       - resets verified property
+#   - supervise():
+#       - fallback network mechanism (experimental)
+#       - re-worked exception handling (needs to be tested)
+#       - added query to only run on newly supervised devices
+#       - resets verified property
+#   - installapps():
+#       - fallback network mechanism (experimental)
+#       - re-worked exception handling (needs to be tested)
+#       - added query to only run on devices with newly installed apps
+#       - resets verified property
+#   - set_background():
+#       - slight modification of logic
+#   - verified property:
+#       - verification status persists between runs
+#       - value in manager config
+#       - moved previous functionality to _verify()
+#   - (new) _verify():
+#       - better checkin detection
+#       - simplified supervision checking
+#       - better app check:
+#           - missing apps were not seen unless all apps were missing
+#       - updates new verified property
+#       - eliminated redundant checks
+#       - better logging
+#   - verify():
+#       - now runs all pending queries before verification check
+#       - no longer runs unnecessarily
+#           - total verification negates re-run
+#       - now checks for pending tasks
+#       - run can be canceled manually
+#   - finalize():
+#       - removed redundant checks now found in verify()
+#       - no longer queues queries
+#       - no longer runs if Stopped
+#       - better logic for settings device backgrounds
+#   - run():
+#       - simplified execution
+#       - remove device argument
 
 class Error(Exception):
     pass
@@ -235,14 +287,13 @@ class DeviceManager(object):
         # _quarantine = self.config.setdefault('quarantine', [])
         # self._quarantined = set(_quarantine)
         
-        self._images = self.config.get('images', _imagedir)
+        self.images = self.config.get('images', _imagedir)
         self._supervision = self.config.get('supervision', _authdir)
 
         self._device = {}
         self._erased = []
         self._list = None
         self._auth = None
-        self._checkin = []
 
     @property
     def stopped(self):
@@ -262,7 +313,37 @@ class DeviceManager(object):
             self.config.update({'reason':reason})
         self.log.error("STOPPED")
         raise Stopped("Hold the press!")
+
+    def manage(self, device):
+        '''Placeholder for future management check
+        Returns True (for now)
+        '''
+        return True
             
+    def authorization(self):
+        '''Uses the directory specified to work out the private key
+        and certificate files used for cfgutil
+        returns ACAuthentication object
+        '''
+        if not self._auth:
+            self.log.debug("getting authorization for cfgutil")
+            dir = self._supervision
+        
+            if not os.path.isdir(dir):
+                err = "no such directory: {0}".format(dir)
+                self.log.error(err)
+                raise Error(err)
+
+            for item in os.listdir(dir):
+                file = os.path.join(dir, item)
+                if item.endswith('.crt'):
+                    cert = file
+                elif item.endswith('.key') or item.endswith('.der'):
+                    key = file
+    
+            self._auth = cfgutil.Authentication(cert, key, self.log)    
+        return self._auth
+
     def findall(self, ecids=None, exclude=[]):
         '''returns list of Device objects for specified ECIDs
         '''
@@ -385,8 +466,10 @@ class DeviceManager(object):
         self.task.query('installedApps', [device.ecid])
         return True
 
-    def check_network(self, devices):    
-        _use_tethering = False
+    def check_network(self, devices, tethered=True):    
+        # TO-DO: this needs to be tested to see that if tethering fails
+        #        a wi-fi profile is used instead
+        _use_tethering = tethered
         if _use_tethering and not tethering.enabled(log=self.log):
             self.log.info("Device Tethering isn't enabled...")
             try:
@@ -403,6 +486,7 @@ class DeviceManager(object):
             sns = devices.serialnumbers()
             tethered = tethering.devices_are_tethered(sns)
             timeout = datetime.now() + timedelta(seconds=60)
+
             while not tethered:
                 time.sleep(5)
                 tethered = tethering.devices_are_tethered(sns)
@@ -426,7 +510,7 @@ class DeviceManager(object):
                                     log=self.log, file=self._cfgutillog)
             time.sleep(2)
 
-    def checkin(self, info, verifying=False):
+    def checkin(self, info, run=True):
         '''process of device attaching
         '''
         device = self.device(info['ECID'], info)
@@ -442,12 +526,15 @@ class DeviceManager(object):
         else:
             name = device.name
 
+        ## Pre-checkin
+
         # this needs to be re-worked
-        erase = False
+        reset = False
         if not device.checkin:
             # first time seeing the device
-            self.log.debug("{0}: never checked in".format(name))
-            erase = self.need_to_erase(device)
+            self.log.debug("{0}: new device found!".format(name))
+            if self.managed(device):
+                reset = self.need_to_erase(device)
         else:
             try:
                 # see if the device was checked since last checkin
@@ -458,28 +545,29 @@ class DeviceManager(object):
             
             if checkedout:
                 self.log.info("{0}: was checked out".format(name))
-                erase = self.need_to_erase(device)
+                reset = self.need_to_erase(device)
+                self.verified = False
             else:
                 self.log.info("{0}: was not checked out".format(name))
 
         # if device needs to be erased
-        if erase:
-            self.log.info("{0}: will be erased".format(name))
+        if reset:
+            self.log.debug("{0}: will be reset".format(name))
             self.task.erase([device.ecid])
+            self.task.query('installedApps', [device.ecid])
+            device.checkin = datetime.now()
         else:
-            self.log.debug("{0}: will not be erased".format(name))
+            self.log.debug("{0}: will not be reset".format(name))
             
-        device.checkin = datetime.now()
-        
-        # TO-DO: re-work
-        # verify will call run() if it needs to
-        if not verifying:
-            self.run(device.ecid)
+        if run:
+            self.run()
 
     def checkout(self, info):
         '''saves timestamp of device checkout (if not restarting)
         '''
         device = self.device(info['ECID'], info)
+        # IDEA: could just return if self.stopped (would eliminate need 
+        #       for device restart tracking)
 
         # skip checkout if device has been marked for restart
         if device.restarting:
@@ -535,7 +623,7 @@ class DeviceManager(object):
         self.log.debug("checking for queries")
         if not self.task.queries():
             self.log.info("no queries to perform")
-            return
+            return False
             
         _cache, ecidset = {}, set()
         # merge all of the queries into one 
@@ -596,76 +684,101 @@ class DeviceManager(object):
     def erase(self, devices):
         '''Erase specified devices and mark them for preparation
         '''
-        
+        # get subset of device ECIDs that need to be erased
         ecids = self.task.erase(only=devices.ecids())
 
         if not ecids:
             self.log.info("no devices need to be erased")
-            return devices
+            return
 
-        # more logging (doesn't really do anything)
+        ## EXTRA LOGGING: (doesn't really do anything)
         _missing = self.task.list('erase')
         if _missing:
             names = self.findall(_missing).names()
             self.log.error("missing devices tasked for erase")
             self.log.debug("missing: {0}".format(names))
 
-        # update devices before erase
+        # mark restart before erase (or will count as checkout)
         for device in self.findall(ecids):
-            # mark restarting before erase (or will count as checkout)
             self.log.debug("found device: {0}".format(device.name))
             device.restarting = True
     
+        
+        excluded = []
+        erased = []
+        failed = []
         try: 
+            self.verified = False
             self.log.info("erasing devices: {0}".format(ecids))
             result = cfgutil.erase(ecids, log=self.log, 
                                    file=self._cfgutillog)
-        except cfgutil.CfgutilError as e:
-            self.log.error("erase failed: {0}".format(e))
+            erased = result.ecids
+            failed = result.missing
+
+        except cfgutil.FatalError as e:
+            # no device was erased
+            self.log.debug("erase: fatal error occurred")
+            self.log.error(str(e))
+            failed = ecids
             if "complete the activation process" in e.message:
-                err = "unable to erase activation locked device"
+                # handle devices that are activation locked
+                _locked = self.findall(e.affected)
+                err = "activiation locked: {0}".format(_locked.names())
                 self.log.error(err)
                 self.report.send(err)
+                ## mechanism for isolating activation locked devices
                 # self.lockdevices(e.affected)
-                self.task.erase(e.unaffected)
-            else:
-                self.task.erase(e.affected)
-            return
+                ## keep these ECIDs from being retasked
+                excluded = e.affected
+            raise
+
+        except cfgutil.CfgutilError as e:
+            # some devices were erased (continue with working devices)
+            erased = e.unaffected
+            failed = e.affected
+
         except Exception as e:
+            # unknown error
             self.log.error("erase: unexpected error: {0!s}".format(e))
-            self.log.info("re-tasking erase: {0}".format(ecids))
-            self.task.erase(ecids)
-            return
+            failed = ecids
+            raise
 
-        erased, failed = result.ecids, result.missing
+        finally:
+            if failed:
+                _devices = self.findall(failed)
+                names = _devices.names()
+                self.log.error("erase failed: {0}".format(names))
+                self.task.erase(failed, exclude=excluded)
+                self.log.debug("re-tasked: {0}".format(failed)))
+                ## extra logging
+                if excluded:
+                    _msg = "excluding: {0}".format(excluded)
+                    self.log.debug(_msg)
+                # unmark failed devices as restarting
+                for device in _devices:
+                    device.restarting = False
+            else:
+                self.log.info("all devices were successfully erased!")
 
-        # process devices that failed to erase (if any)
-        if failed:
-            self.log.error("erase failed: {0}".format(failed))
-            self.task.erase(failed)
-            for device in self.findall(failed):
-                device.restarting = False
-        else:
-            self.log.info("all devices were successfully erased!")
                 
         ## process erased devices
         # task devices for supervision and app installation
         self.task.prepare(erased)
         self.task.installapps(erased)
+
         for device in self.findall(erased):
-            # update timestamp (resets various record keys)
             device.erased = datetime.now()
 
-        # task device for preparation
         self.task.add('restart', erased)
-        self.log.debug("device: {0}".format(device.record))
         self.stop(reason='restart')
     
     def supervise(self, devices):
-        # this is messy because it accepts devices and returns devices
-        # but also sometimes ignores devices... whatever
+        '''All encompassing supervision
+        devices are stripped down to unsupervised
+        '''
+        ## Check if manager has been stopped
         if self.stopped:
-            raise Stopped("skipped device supervision")
+            raise Stopped("device supervision was stopped")
 
         # list of device ECID's that need supervision
         ecids = self.task.prepare(only=devices.unsupervised().ecids())                
@@ -674,7 +787,7 @@ class DeviceManager(object):
             self.log.info("no devices need to be supervised")
             return
 
-        # more logging (doesn't really do anything)
+        ## EXTRA LOGGING: (doesn't really do anything)
         _missing = self.task.list('prepare')
         if _missing:
             names = self.findall(_missing).names()
@@ -687,36 +800,62 @@ class DeviceManager(object):
         prepared, failed = [], []
         try:
             self.log.info("preparing devices: {0}".format(ecids))
+            self.verified = False
             result = cfgutil.prepareDEP(ecids, log=self.log, 
                                         file=self._cfgutillog)
             prepared, failed = result.ecids, result.missing
+
         except cfgutil.CfgutilError as e:
-            self.log.error("possible failure: {0!s}".format(e))
+            self.log.error("supervision partial failed: {0!s}".format(e))
             prepared, failed = e.unaffected, e.affected
+
         except cfgutil.FatalError as e:
-            self.log.error("prepare failed: {0!s}".format(e))
-            # self.recover(e)
+            self.log.error("supervision failed: {0!s}".format(e))
             if "must be erased" in e.message:
                 failed = e.ecids
+                self.task.erase(failed)
             elif e.detail == "Network communication error.":
                 # started happening a lot with macOS10.12 and iOS12.1
                 # restarting the device seems to fix the issue, but
                 # there's no way to restart an unsupervised device
                 # without physical interaction
                 # tethering.stop(self.log) # doesn't fix
-                # IDEA: could (maybe) install Wi-Fi profile and retry
-                prepared, failed = e.unaffected, e.affected
+                # SOLUTION: installing Wi-Fi profile works
+                # TO-DO: Retry mechanism
+                
+                # too nested for my liking
+                try:
+                    self.log.debug("attempting to recover")
+                    self.check_network(self.findall(ecids), 
+                                              tethered=False)
+                    result = cfgutil.prepareDEP(ecids, log=self.log, 
+                                        file=self._cfgutillog)
+                    prepared, failed = result.ecids, result.missing
+                except cfgutil.FatalError as e:
+                    err = "recovery partially failed: {0!s}".format(e)
+                    self.log.err(err)
+                    failed = e.ecids
+                except cfgutil.CfgutilError as e:                    
+                    err = "recovery partially failed: {0!s}".format(e)
+                    self.log.err(err)
+                    prepared = e.unaffected
+                    failed = e.affected
             else:
                 # put everything back into the queue
                 failed = e.ecids
-            raise
+
+            if not prepared:
+                raise
+
         except Exception as e:
             self.log.error("prepare: unexpected error: {0!s}".format(e))
             failed = e.ecids
             raise
+
         finally:
             # re-task any failed devices
             self.task.prepare(failed)
+            self.task.query('isSupervised', prepared)
             prepared_devices = self.findall(prepared)
             names = prepared_devices.names()
             self.log.info("successfully prepared: {0}".format(names))
@@ -735,7 +874,7 @@ class DeviceManager(object):
             self.log.info("no apps need to be installed")
             return
 
-        # more logging (doesn't really do anything)
+        ## EXTRA LOGGING: (doesn't really do anything)
         _missing = self.task.list('installapps')
         if _missing:
             names = self.findall(_missing).names()
@@ -750,6 +889,7 @@ class DeviceManager(object):
             udids = _devices.udids()
             try:
                 self.log.info("{0} installing {1}".format(udids,apps))
+                self.verified = False
                 adapter.install_vpp_apps(udids,apps,skip=True,wait=True)
             except adapter.ACAdapterError as e:
                 self.log.error(e)
@@ -759,59 +899,33 @@ class DeviceManager(object):
                 err = "installapps: unexpected error: {0!s}".format(e)
                 self.log.error(err)
                 raise
+        self.task.query('installedApps', devices.ecids())
         
-    def authorization(self):
-        '''Uses the directory specified to work out the private key
-        and certificate files used for cfgutil
-        returns ACAuthentication object
-        '''
-        if not self._auth:
-            self.log.debug("getting authorization for cfgutil")
-            dir = self._supervision
-        
-            if not os.path.isdir(dir):
-                err = "no such directory: {0}".format(dir)
-                self.log.error(err)
-                raise Error(err)
-
-            for item in os.listdir(dir):
-                file = os.path.join(dir, item)
-                if item.endswith('.crt'):
-                    cert = file
-                elif item.endswith('.key') or item.endswith('.der'):
-                    key = file
-    
-            self._auth = cfgutil.Authentication(cert, key, self.log)    
-        return self._auth
-
     def set_background(self, devices, _type):
-        '''needs to be re-adapted to new layout
+        '''set the background of the specified devices
         '''
-        # IDEA: another class for listing types of devices
-        #   self.devices.connected
-        #   self.devices.available
-        #   self.devices.supervised
+        if self.stopped:
+            raise Stopped("skipping wallpaper")
+
         if not devices:
             self.log.error("background: no devices specfied")
             return
 
-        if not self._images:
+        if not self.images:
             self.log.error("no images availalbe")
             return
 
+        # background cannot be set on unsupervised devices
         ecids = devices.supervised().ecids()
         if not ecids:
-            if devices:
-                self.log.error("can't ajust background on"
-                               " non-supervised devices")
-            self.log.info("no backgrounds modified")
+            self.log.info("no wallpaper modified")
             return
 
         images = {}
-        for file in os.listdir(self._images):
+        for file in os.listdir(self.images):
             name, ext = os.path.splitext(file)
             if ext in ['.png','.jpeg','.jpg']:            
-                path = os.path.join(self._images, file)
+                path = os.path.join(self.images, file)
                 images[name] = path
         
         args = ['--screen', 'both']
@@ -832,105 +946,102 @@ class DeviceManager(object):
 
     @property
     def verified(self):
-        '''Placeholder for future verification 
-
-        returns False (for now)
-        
-        because they system should be self healing, re-runs
-        shouldn't do anything if everything is worked
+        '''Check if verification has been completed
+        (reset by checkin, checkout, erase, supervise, and installapps)
         '''
-        self.log.debug("verified: verifying devices")
+        return self.config.setdefault('verified', False)
+
+    @verified.setter
+    def verified(self, value):        
+        if not isinstance(value, bool):
+            raise TypeError("{0}: not boolean".format(value))
+        self.config.update({'verified': value})
+
+    def _verify(self):
+        '''Current verification mechanism, but is somewhat hidden:
+        >>> if not self.verified:
+        >>>     # do something
+        
+        NOTE: I would like to change this in the future, but should work
+              relatively well for now 
+        '''
+        self.log.debug("verifying devices")
+
         # this should be made into a method
         try:
             config.FileLock('/tmp/ipad-restart.lock').acquire(timeout=0)
         except config.TimeoutError:
             self.log.debug("restarting... skipping verification")
             return True
-            
-        devicelist = self.list()
-        
+                    
         _tasks = {}
         _verified = True
-        for info in devicelist:
+        # get list of all currently connected devices
+        for info in self.list():
             device = self.device(info['ECID'], info)
-            name = device.name
-            msg = "verify: {0}".format(name)
+            msg = "verifying: {0}".format(device.name)
+            self.log.info("verifying: {0}".format(device.name))
 
-            self.log.debug("{0}: checking serialnumber".format(msg))
+            ## Verify device Serial Number
             if not device.serialnumber:
-                self.log.error("{0}: serialnumber missing".format(msg))
+                self.log.error('  serial number: missing...')
                 self.task.query('serialNumber', [device.ecid])
-                _verified = False
-            
-            ## Checkin check
-            self.log.debug("{0}: checking checkin".format(msg))
-            if not device.checkin:
-                self.log.error("{0}: never checked in".format(msg))
-                self._checkin.append(info)
-                _verified = False
-                self.log.debug("{0}: skipping other checks".format(msg))
-                continue
-
-            ## Erase check
-            self.log.debug("{0}: checking erase".format(msg))
-            if not device.erased:
-                self.log.error("{0}: never erased".format(msg))
-                erase = _tasks.setdefault('erase', [])
-                erase.append(device.ecid)
-                self.log.debug("{0}: skipping other checks".format(msg))
-                continue
-                
-            ## Enrollment check
-                # we're just going to have task it for enrollment 
-                # and trust it will work for now
-                
-                ## prepared devices are not necessarily supervised
-                # self.task.query('isSupervised', [ecid])
-
-                # I would also like to add some code to look for previous
-                # errors (maybe it couldn't enroll for a reason)
-
-                # this will have to be designed and tested
-                # idea is to load a callback function into the query to 
-                # check the result once the query is made
-
-                # create query and callback for processing
-                # self.task.query('isSupervised', [ecid], 
-                #                 self._isSupervised)
-            self.log.debug("{0}: checking enrollment".format(msg))
-            if not device.enrolled:
-                self.log.error("{0}: never enrolled".format(msg))
-                enroll = _tasks.setdefault('prepare', [])
-                enroll.append(device.ecid)
-            # might be a messy bandaid...
-            elif (device.checkin < device.erased < device.enrolled):
-                # remove this ECID from the prepare
-                ecid = self.task.get('prepare', only=[device.ecid])
-                _msg = "{0}: removed prepare task".format(msg)
-                if ecid:                    
-                    self.log.debug(_msg)
-             
-            ## App check
-            self.log.debug("{0}: checking apps".format(msg))
-            if not device.apps:
-                # device missing all apps
-                self.log.error("{0}: no apps installed".format(msg))
-                installapps = _tasks.setdefault('installapps', [])
-                installapps.append(device.ecid)
             else:
-                # set of all apps that should be installed
-                appset = set(self.apps.list(device))
-                # results in empty set() if all apps are installed
-                appnames = [x['itunesName'] for x in device.apps]
-                _missing = list(appset.difference(appnames))
-                if _missing:
-                    # some apps are not installed
-                    err = "{0}: missing apps: {1}".format(msg, _missing)
-                    self.log.error(err)
-                    installapps = _tasks.setdefault('installapps', [])
-                    installapps.append(device.ecid)
+                self.log.info('  serial number: good!')
+
+            ## Verify device Checkin
+            if not device.checkin:
+                self.log.error("        checkin: failed...")
+                self.log.debug(" ... skipping additional verification")
+                _verified = False
+                self.checkin(info, run=False)
+                continue
+            else:
+                self.log.info("        checkin: succeeded!")
+
+
+            ## Verify device was erased
+            if not device.erased:
+                self.log.error("          erase: failed...")
+                self.log.debug(" ... skipping additional verification")
+                _verified = False
+                _erasetask = _tasks.setdefault('erase', [])
+                _erasetask.append(device.ecid)
+                continue
+            else:
+                self.log.info("          erase: succeeded!")
+            
+
+            ## Verify device is supervised
+            if not device.supervised:
+                _enrolltask = _tasks.setdefault('prepare', [])
+                _enrolltask.append(device.ecid)
+                self.log.error("    supervision: failed...")
+            else:
+                self.log.info("    supervision: succeeded!")
+                   
+                                
+            ## Verify all Apps were installed
+            app_set = set(self.apps.list(device))
+            if app_set:
+                if device.apps:
+                    installed = [x['itunesName'] for x in device.apps]
+                    # list of any apps that are missing
+                    missing = list(app_set.difference(installed))
+                else:
+                    # all apps are missing
+                    missing = list(app_set)
+                if missing:
+                    # some or all of apps are missing from the device
+                    _apptask = _tasks.setdefault('installapps', [])
+                    _apptask.append(device.ecid)               
+                    self.log.error("           apps: missing...")
+                    self.log.debug("missing apps: {0}".format(missing))
+            else:
+                self.log.info("           apps: N/A")
+                
         
-        # update all tasks in an accumulative swoop
+        # process all re-tasked ecids
         for name,ecids in _tasks.items():
             # if any tasks have to be added then verification failed
             _verified = False
@@ -940,10 +1051,10 @@ class DeviceManager(object):
             self.log.error("verification failed")
             self.log.debug("retasked: {0}".format(_tasks))
             
-
+        self.verified = _verified
         return _verified
         
-    def verify(self):
+    def verify(self, run=False):
         '''Placeholder for verfication steps
         run() should be harmless in the event of zero tasks
         '''
@@ -955,74 +1066,88 @@ class DeviceManager(object):
                     self.log.debug("ran less than 1 minute ago...")
                     return
 
-        self.log.debug("verifying devices")
+        #TO-DO:
+        # x remove redundant checks from finalize()
+        # x make sure additional queries are added into each function:
+        # - backgrounds? (not in _verify)
+        # - erase? verifier object erase(expected apps)
+        # - check recursion (below)
+
+        ## Run any for pending queries
+        if self.run_queries():
+            self.verified = False
+        
+        ## Check all tasks have been completed
+        for k in ['erase', 'prepare', 'installapps']:
+            pending_tasks = self.task.list(k)
+            if pending_tasks:
+                self.verified = False      
+
+        ## Check verification status
         if not self.verified:
-            for info in self._checkin:
-                # checkin the device without calling run()
-                self.checkin(info, verifying=True)
-            self.run()
+            self.verified = self._verify()
+        else:
+            self.log.info("all devices verified!")
+        
+        # re-check verification after running _verify()
+        if not self.verified:
+            self.log.info("verification failed")
+            if run:
+                self.run()
 
     def finalize(self):
         '''Redundant finalization checks, verify tasks completed, 
         and adjust backgrounds of supervised devices
         '''
+        self.log.debug("finalizing devices")
         if self.stopped:
-            self.log.debug("finalization skipped")
             self.config.update({'finished':datetime.now()})
-            return
-        else:
-            self.log.debug("finalizing devices")
+            raise Stopped("finalization stopped")
 
-        self.log.debug("finalization: adding queries")
-        devices = self.available()
-        self.task.query('isSupervised', devices.ecids())
-        self.task.query('installedApps', devices.ecids())
-        # consume queries before labeling retasked ECIDs
-        self.run_queries()
-
-        retasked_ecids = set()
+        ## Check tasks for any re-tasked devices
+        _retasked = set()
         if not self.verified:
-            self.log.error("finalization: verification failed")
-            self.log.info("Adding to agenda:")
+            self.verified = self._verify()
             for k,v in self.task.record.items():
                 if v:
-                    retasked_ecids.update(v)
-                    self.log.info("{0}: {1}".format(k,v))
+                    _retasked.update(v)
+                    self.log.debug("RETASKED: {0}: {1}".format(k,v))
         
-        ## Find devices that need wallpaper changed (supervised only)
-        finished, unfinished = DeviceList(), DeviceList()
-        for device in devices:
-            if device.ecid in retasked_ecids:
-                if device.background != 'alert':
-                    unfinished.append(device)
-            elif device.background != 'background':
-                finished.append(device)
+        _wallpapers = {'alert': [], 'background': []}
 
-        try:
-            if unfinished:
-                self.set_background(unfinished, 'alert')
-            if finished:
-                self.set_background(finished, 'background')
-        except cfgutil.Error as e:
-            self.log.error("unable to set backgrounds")
-            
+        devices = self.available()
+        ## Find devices that need wallpaper
+        for d in devices:
+            if d.ecid in _retasked:
+                if d.background != 'alert':
+                    _wallpapers['alert'].append(d)
+            elif d.background != 'background':
+                _wallpapers['background'].append(d)
+
+        err = "unable to set background: {0}: {1!s}"
+        for image, _devices in _wallpapers.items():
+            if _devices:
+                try:
+                    self.set_background(_devices, image)
+                except cfgutil.Error as e:
+                    self.log.error(err.format(image, e))
+        
+        # update finishing timestamp            
         self.config.update({'finished':datetime.now()})
-        self.log.debug("finalization completed")
+        self.log.debug("finalization complete")
             
-    def run(self, ecid=None):
+    def run(self):
         # keep multiple managers from running simultaneously
-        # will be changed in future version
+        #   (will be changed in future version)
         with self.lock.acquire(timeout=-1):
-            # if ecid is tasked for restart, skip this run
-            if ecid and ecid in self.task.list('restart'):
-                msg = "{0}: restarting: skipping run".format(ecid)
-                self.log.debug(msg)
+            if self.stopped:
+                self.log.debug("run stopped")
                 return
             
-            if self.task.alldone():
-                # exit early if no tasks exist
+            if self.task.alldone() and self.verified:
                 self.log.info("all tasks have been completed")
                 self.finalize()
+                # exit early if no tasks exist
                 return
             else:
                 # log all tasks by name and ECIDs
@@ -1048,8 +1173,6 @@ class DeviceManager(object):
             except Stopped as e:
                 self.log.info(e)
                 return
-            except Exception as e:
-                self.log.error("unexpected error: {0!s}".format(e))
 
             ## Prepare devices (least critical step w/ DEP)
             try:
@@ -1057,17 +1180,12 @@ class DeviceManager(object):
             except Stopped as e:
                 self.log.info(e)
                 return
-            except Exception as e:
-                self.log.error("unexpected error: {0!s}".format(e))
-                self.log.error(e)
 
             try:
                 self.installapps(devices)
             except Stopped as e:
                 self.log.info(e)
                 return
-            except Exception as e:
-                self.log.error(e)
             
             self.finalize()
 
