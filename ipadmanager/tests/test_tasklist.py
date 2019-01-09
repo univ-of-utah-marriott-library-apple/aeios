@@ -255,6 +255,33 @@ class TestTaskListBasic(BaseTestCase):
         self.assertFalse(self.task.list('erase'))
 
 
+class TestTaskListRemove(BaseTestCase):
+
+    # TO-DO: more tests
+
+    def test_remove_all(self):
+        ecids = self.ecids + self.only
+        self.task.add('erase', self.ecids)
+        self.task.add('prepare', self.only)
+        self.task.query('installedApps', self.only)
+        self.task.query('isSupervised', self.ecids)
+        self.task.remove(ecids, all=True)
+        self.assertEquals(self.task.get('erase'), [])
+        self.assertEquals(self.task.get('prepare'), [])
+        self.assertEquals(self.task.query('installedApps'), [])
+        self.assertEquals(self.task.query('isSupervised'), [])
+
+    def test_remove_missing(self):
+        self.task.add('erase', self.ecids)
+        self.task.remove(['missing_ecid'], tasks=['erase'])
+        self.assertItemsEqual(self.task.get('erase'), self.ecids)
+
+    def test_remove_all_empty_ecids(self):
+        self.task.add('erase', self.ecids)
+        self.task.query('installedApps', self.only)
+        self.task.remove([], all=True)
+
+    
 class TestTaskListErase(BaseTestCase):
 
     def setUp(self):
@@ -572,6 +599,14 @@ class TestTaskListQueries(BaseTestCase):
         self.assertEquals(self.task.queries(), [])
         ecids = self.task.record['isSupervised']
         self.assertEquals(ecids, [])
+
+    def test_query_removes_keys(self):
+        self.task.query('isSupervised', self.ecids)
+        excluded = ['missing']
+        result = self.task.query('isSupervised', exclude=excluded)
+        self.assertEquals(self.task.queries(), [])
+        self.asserFalse(self.task.record.has_key('isSupervised'))
+        self.asserFalse(self.task.record.has_key('queries'))
 
 
 class TestTaskListRepeatQueries(BaseTestCase):
