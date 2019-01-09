@@ -18,6 +18,9 @@ __all__ = ['TaskList']
 
 # 2.0.1:
 #   - added alldone() function
+# 2.1.0:
+#   - added remove()
+#   - modified query to remove key if empty
 
 
 class TaskList(object):
@@ -30,12 +33,12 @@ class TaskList(object):
 
         self.config = config.Manager("{0}.tasks".format(id), **kwargs)
         self.file = self.config.file
+        self._taskkeys = ['erase', 'prepare', 'installapps', 'finished']
         try:
             self.config.read()
         except:
-            _tasks = {'erase':[], 'prepare':[], 
-                      'installapps':[], 'queries':[],
-                      'finished':[]}
+            _tasks = {k:[] for k in self._taskkeys}
+            _tasks['queries'] = []
             self.config.write(_tasks)
 
     @property
@@ -112,6 +115,26 @@ class TaskList(object):
                 except KeyError:
                     self.config.update({key: list(_items)})
 
+    def remove(self, ecids, tasks=None, queries=None, all=False):
+        '''remove specified ECID specified tasks and/or queries
+        '''
+        # TO-DO: this needs to be tested
+        with self.config.lock.acquire():
+            if all:
+                # remove all tasks associated with specified ECIDs
+                for task in self._taskkeys:
+                    self.get(task, only=ecids)
+
+                for q in self.queries(only=ecids):
+                    self.query(q, only=ecids)
+            else:
+                if tasks:
+                    for task in tasks:
+                        self.get(task, only=ecids)
+                if queries:
+                    for q in queries:
+                        self.query(q, only=ecids)
+        
     def alldone(self):
         '''Returns False if any tasks need to be performed
         '''
@@ -138,12 +161,12 @@ class TaskList(object):
                 if self.list(key):
                     self.add('queries', [key])
             else:
-                
                 ecids = self.get(key, exclude, only)
                 if not self.list(key):
                     # if nothing's left, we can get rid of the query
                     try:
                         self.config.remove('queries', key)
+                        self.config.remove(key)
                     except ValueError:
                         pass
                 return ecids
