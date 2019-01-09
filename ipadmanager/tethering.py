@@ -18,7 +18,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright(c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '1.4.1'
+__version__ = '1.4.2'
 __url__ = None
 __description__ = 'functions for iOS device tethering'
 
@@ -130,12 +130,15 @@ def _parse_tetherator_status(status):
     # return list of all device dicts
     return tethered_devices
 
-def assetcachetetheratorutil(arg, json=True):
+def assetcachetetheratorutil(arg, json=True, log=None):
+    if not log:
+        global logger
+        log = logger
     cmd = ['/usr/bin/AssetCacheTetheratorUtil']
     if json:
         cmd += ['--json']
     cmd += [arg]
-    logger.debug("> {0}".format(" ".join(cmd)))
+    log.debug("> {0}".format(" ".join(cmd)))
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
                               stderr=subprocess.PIPE)
     out, err = p.communicate()
@@ -202,9 +205,10 @@ def wait_for_devices(previous, timeout=10, poll=2, **kwargs):
     prev_sn = [d['Serial Number'] for d in previous]
     found = []
     tethered = []
-    count = timeout / poll
-
-    while count < timeout:
+    max = timeout / poll
+    count = 0
+    
+    while count < max:
         current = devices(**kwargs)
         appeared = []
         
@@ -242,7 +246,7 @@ def wait_for_devices(previous, timeout=10, poll=2, **kwargs):
         waitmsg = "waiting on {0} device(s)".format(len(waiting))
         waitmsg += ": ({0})".format(", ".join(waiting))
         logger.info(waitmsg)
-        count += countpoll
+        count += 1
         time.sleep(poll)
 
     raise TetheringError("devices never came up: {0}".format(waiting))
@@ -261,7 +265,7 @@ def tethered_caching(args):
         logger.error(e)
         raise Error("tethered-caching failed")    
 
-def restart(timeout=30, log=None):
+def restart(timeout=30, wait=True, log=None):
     '''Restart tethered-caching (requires root)
     (Not supported in 10.13+)
     '''
@@ -275,11 +279,8 @@ def restart(timeout=30, log=None):
     start()
     logger.debug("successfully restarted tethering!")
 
-    if previous:
-        try:
-            wait_for_devices(previous, timeout=timeout)
-        except TetheringError:
-            logger.error("some devices never came back up")
+    if previous and wait:
+        wait_for_devices(previous, timeout=timeout)
 
 def start():
     '''Starts tethered-caching (requires root)
