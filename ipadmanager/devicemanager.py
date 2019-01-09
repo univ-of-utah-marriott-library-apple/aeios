@@ -24,7 +24,7 @@ __email__ = "sam.forester@utah.edu"
 __copyright__ = ("Copyright (c) 2019 "
                  "University of Utah, Marriott Library")
 __license__ = 'MIT'
-__version__ = '2.5.0'
+__version__ = '2.5.1'
 __url__ = None
 __all__ = [
     'DeviceManager', 
@@ -201,6 +201,33 @@ __all__ = [
 #   - run():
 #       - simplified execution
 #       - remove device argument
+# 2.5.1:
+#   - minor bug fixes
+# 2.5.2:
+#   - fixed mechanism for app reporting
+#   - run_queries():
+#       - isolated queries to only be performed on available devices
+#       - fixed bug that consumed queries on unavailable devices
+#       - fixed bug that erased installedApps if query wasn't present
+#       - added modification to verified property if query is run
+#   - added more logging:
+#       - added log to reporter
+#       - added clearer messages
+#   - finalize():
+#       - added missing call to verify()
+#   - fixed bug where new apps would not be reported
+#   - verify():
+#       - added a stop check to exit early
+#       - moved entire verification inside filelock
+#   - _verify():
+#       - added functionality to remove unnecessary tasks
+#       - attempted to add mechanism to sanitize records of unavailable
+#         devices, requires:
+#           - slightly updated config [DONE]
+#           - tasklist 2.1.1 [DONE]
+#   - find_new_apps():
+#       - slightly changed logic
+#       - added better logging
 
 class Error(Exception):
     pass
@@ -279,9 +306,10 @@ class DeviceManager(object):
         self.apps = AppManager(id, path=self.resources, logger=self.log)
 
         _reporting = self.config.get('reporting', {'Slack': {}})
-        self.report = reporting.reporterFromSettings(_reporting)
-
-
+        self.log.debug("reporting: {0}".format(_reporting))
+        self.report = reporting.reporterFromSettings(_reporting, 
+                                                        self.log)
+        
         self._lookup = self.config.setdefault('devices', {})
         self.idle = self.config.setdefault('idle', 300)
         # _quarantine = self.config.setdefault('quarantine', [])
@@ -421,29 +449,33 @@ class DeviceManager(object):
         
         return _device
                                
-    def find_new_apps(self, device, applist):
+    def find_new_apps(self, device):
         '''Use the Appmanager to find and report new, user-installed 
-        apps using slack
+        applications
         '''
-        # `cfgutil get installedApps` provides a list of dicts
-        #   using 4 keys: ['itunesName', 'displayName',
-        #                  'bundleIdentifier', 'bundleVersion']
+        # `cfgutil get installedApps`:
+        #   provides a list of dicts using 4 keys: 
+        #      ['itunesName', 'displayName', 
+        #        'bundleIdentifier', 'bundleVersion']
         # apps are installed using 'itunesName', and 'displayName' 
         # is useful only when parsing GUI
-        appnames = []
-        for app in applist:
-            name = app.get('itunesName')
-            if name:
-                appnames.append(name)
-        # get list of apps that aren't known to the Appmanager
+
+        msg = "checking {0} for user-installed apps..."
+        self.log.debug(msg.format(device.name))
+        appnames = [app.get('itunesName') for app in device.apps]
+            
+        ## list of apps that aren't known to the Appmanager
         _new = self.apps.unknown(device, appnames)
         # only report if new apps were found
         if _new:
+            # TO-DO: design mechanism for tracking repeat installations
             userapps = [str(x) for x in _new]
             smsg = "new user apps: {0}".format(userapps)
             msg = "NEW: {0}: {1}".format(device.name, smsg)
             self.log.info(msg)
             self.report.send(msg)
+        else:
+            self.log.debug("{0}: no new apps".format(device.name))
     
     def list(self, refresh=False):        
         '''Returns list of attached devices using cfgutil.list()
@@ -485,7 +517,7 @@ class DeviceManager(object):
             self.log.debug("using tethering")
             sns = devices.serialnumbers()
             tethered = tethering.devices_are_tethered(sns)
-            timeout = datetime.now() + timedelta(seconds=60)
+            timeout = datetime.now() + timedelta(seconds=10)
 
             while not tethered:
                 time.sleep(5)
@@ -497,7 +529,7 @@ class DeviceManager(object):
             if not tethered:
                 try:
                     # this will have to be removed eventually
-                    tethering.restart(timeout=20)
+                    tethering.restart(timeout=10)
                     return
                 except tethering.Error as e:
                     self.log.error(e)
@@ -620,23 +652,35 @@ class DeviceManager(object):
             self.config.delete('reason')
 
     def run_queries(self):
-        self.log.debug("checking for queries")
+        '''runs tasked queries using cfgutil
+
+        '''
+        self.log.info("running device queries...")
         if not self.task.queries():
             self.log.info("no queries to perform")
-            return False
-            
+            return
+        
+        available = self.available().ecids()
+        ## Temporary cache of existing queries
         _cache, ecidset = {}, set()
         # merge all of the queries into one 
         for q in self.task.queries():
             # empty the query of all ECIDs (preserved in _cache)
-            _cache[q] = self.task.query(q)
-            # create a set of all unique ECIDs
-            ecidset.update(_cache[q])
+            ecids = self.task.query(q, only=available)
+            if ecids:
+                _cache[q] = ecids
+                # create a set of all unique ECIDs
+                ecidset.update(_cache[q])
+
+        if not _cache:
+            self.log.debug("no queries for available devices")
+            return
 
         # list of all keys for cfgutil.get()
         queries = _cache.keys()
         self.log.debug("queries: {0}: {1}".format(queries, ecidset))
         try:
+            self.verified = False
             self.log.debug("{0}: {1}".format(queries, ecidset))
             result = cfgutil.get(queries, ecidset, log=self.log, 
                                  file=self._cfgutillog)
@@ -648,34 +692,56 @@ class DeviceManager(object):
                 self.log.debug(msg)
                 self.task.query(q, ecids)
             raise
+        
+        ## Process results
 
-        ## process the results (per device)
-        # if device is missing from the result
+        # all devices that were specified in the combined query
         for device in self.findall(ecidset):
-            # parse the result this device
+            # get all information returned for this device
             info = result.get(device.ecid, {})
-            _installed = info.get('installedApps', [])
-            device.apps = _installed 
-            if _installed: 
-                # record new apps (if any)
-                self.find_new_apps(device, _installed)
+            if info:
+                # iterate the cache to find queries for this device
+                for q,ecids in _cache.items():
+                    # NOTE: may only update the key that was queried
+                    #       ... might be beneficial to update all keys?
+                    #       ... would be side effect...
+                    if device.ecid in ecids:
+                        # get the value of the query result
+                        v = info.get(q)
+                        if v is not None:
+                            device.update(q, v)
+                            # remove successful queries from the cache
+                            ecids.remove(device.ecid)
+                        else:
+                            err = "missing query result: {0}: {1}"
+                            self.log.error(err.format(q, device.name))
 
-            # iterate the cache to find queries for this device
-            for q,ecids in _cache.items():
-                if device.ecid in ecids:
-                    # get the value of the query result
-                    v = info.get(q)
-                    if v is not None:
-                        device.update(q, v)
-                    # remove successful queries from the cache
-                    ecids.remove(device.ecid)
+                # TO-DO: should be handled elsewhere and not buried here
+                if q == 'installedApps':
+                    # find and report any unknown apps
+                    self.find_new_apps(device)
+                
+            else:
+                err = "no results returned for device: {0}"
+                self.log.error(err.format(device.name))
 
-        # cache should only be made up of failed queries at this point
+            ## old (broken) mechanism for tracking apps (see above)     
+            # if _cache.has_key('installedApps'):
+            #     if _cache['installedApps'].get(device.ecid):
+            #         _installed = info.get('installedApps', [])
+            #         device.apps = _installed 
+            #         if _installed: 
+            #             # record new apps (if any)
+            #             self.find_new_apps(device, _installed)
+
+
+        # cache should only be made up of failed (or un-run)
+        # queries at this point
         # TO-DO: test cache removes successful queries
         for q,ecids in _cache.items():
             if ecids:
-                msg = 're-building query: {0}: {1}'.format(q,ecids)
-                self.log.debug(msg)
+                msg = "run_queries: re-tasking query: {0}: {1}"
+                self.log.debug(msg.format(q, ecids))
                 self.task.query(q, ecids)
 
         # forward along the results for processing elsewhere
@@ -749,7 +815,7 @@ class DeviceManager(object):
                 names = _devices.names()
                 self.log.error("erase failed: {0}".format(names))
                 self.task.erase(failed, exclude=excluded)
-                self.log.debug("re-tasked: {0}".format(failed)))
+                self.log.debug("re-tasked: {0}".format(failed))
                 ## extra logging
                 if excluded:
                     _msg = "excluding: {0}".format(excluded)
@@ -795,7 +861,11 @@ class DeviceManager(object):
             self.log.debug("missing: {0}".format(names))
 
         # make sure device network checks out
-        self.check_network(self.findall(ecids))
+        try:
+            self.check_network(self.findall(ecids), tethered=True)
+        except tethering.Error as e:
+            self.log.error("network error: {0!s}".format(e))
+            self.check_network(self.findall(ecids), tethered=False)
     
         prepared, failed = [], []
         try:
@@ -965,21 +1035,15 @@ class DeviceManager(object):
         NOTE: I would like to change this in the future, but should work
               relatively well for now 
         '''
-        self.log.debug("verifying devices")
-
-        # this should be made into a method
-        try:
-            config.FileLock('/tmp/ipad-restart.lock').acquire(timeout=0)
-        except config.TimeoutError:
-            self.log.debug("restarting... skipping verification")
-            return True
+        self.log.debug("running significant verification")
                     
         _tasks = {}
         _verified = True
         # get list of all currently connected devices
+        available = []
         for info in self.list():
             device = self.device(info['ECID'], info)
-            msg = "verifying: {0}".format(device.name)
+            available.append(device.ecid)
             self.log.info("verifying: {0}".format(device.name))
 
             ## Verify device Serial Number
@@ -987,7 +1051,7 @@ class DeviceManager(object):
                 self.log.error('  serial number: missing...')
                 self.task.query('serialNumber', [device.ecid])
             else:
-                self.log.info('  serial number: good!')
+                self.log.info('   serial number: good!')
 
             ## Verify device Checkin
             if not device.checkin:
@@ -997,7 +1061,7 @@ class DeviceManager(object):
                 self.checkin(info, run=False)
                 continue
             else:
-                self.log.info("        checkin: succeeded!")
+                self.log.info("         checkin: succeeded!")
 
 
             ## Verify device was erased
@@ -1009,7 +1073,7 @@ class DeviceManager(object):
                 _erasetask.append(device.ecid)
                 continue
             else:
-                self.log.info("          erase: succeeded!")
+                self.log.info("           erase: succeeded!")
             
 
             ## Verify device is supervised
@@ -1018,7 +1082,9 @@ class DeviceManager(object):
                 _enrolltask.append(device.ecid)
                 self.log.error("    supervision: failed...")
             else:
-                self.log.info("    supervision: succeeded!")
+                self.log.info("     supervision: succeeded!")
+                # remove ecid from task (if present)
+                self.task.prepare(only=[device.ecid])
                    
                                 
             ## Verify all Apps were installed
@@ -1031,34 +1097,67 @@ class DeviceManager(object):
                 else:
                     # all apps are missing
                     missing = list(app_set)
+
                 if missing:
                     # some or all of apps are missing from the device
                     _apptask = _tasks.setdefault('installapps', [])
                     _apptask.append(device.ecid)               
                     self.log.error("           apps: missing...")
                     self.log.debug("missing apps: {0}".format(missing))
+                else:
+                    self.log.info("            apps: installed!")
+                    # remove ecid from task (if present)
+                    self.task.installapps(only=[device.ecid])
+                    
             else:
-                self.log.info("           apps: N/A")
-                
+                self.log.info("            apps: N/A")
         
-        # process all re-tasked ecids
+        # TO-DO: this doesn't seem to be working... but isn't breaking
+        #        anything either
+        # NOTE:  probably don't need to fail verification
+
+        ## Check unavailable devices        
+        unavailable = self.findall(exclude=available)
+
+        remove_pending = []
+        for device in self.findall(exclude=available):
+            # skip restarting devices
+            if device.restarting:
+                continue
+
+            # sanitize unavailable device records
+            remove_pending.append(device.ecid)
+            if not device.checkout:
+                self.log.error("device was never checked out")
+                device.checkout = datetime.now()
+                self.task.remove(all=True)
+        
+        ## remove all pending tasks and queries for missing devices
+        self.log.debug("removing unavailable tasks")
+        self.task.remove(remove_pending, all=True)
+
+        ## Re-task anything that failed verification
         for name,ecids in _tasks.items():
             # if any tasks have to be added then verification failed
             _verified = False
             self.task.add(name, ecids)
+            msg = "_verify: retasked: {0}: {1}"
+            self.log.debug(msg.format(name, ecids))
         
-        if not _verified:
-            self.log.error("verification failed")
-            self.log.debug("retasked: {0}".format(_tasks))
+        self.log.debug("_verify: status: {0}".format(_verified))
             
-        self.verified = _verified
         return _verified
         
     def verify(self, run=False):
-        '''Placeholder for verfication steps
-        run() should be harmless in the event of zero tasks
+        '''Simple verification
+        runs more significant verification if any queries were run
         '''
         with self.lock.acquire(timeout=-1):
+            if self.stopped:
+                self.log.info("verify was stopped")
+                return
+
+            # TO-DO: fix for adjusted idle timing
             last_run = self.config.get('finished')
             if last_run:
                 _seconds = (datetime.now() - last_run).seconds
@@ -1066,34 +1165,47 @@ class DeviceManager(object):
                     self.log.debug("ran less than 1 minute ago...")
                     return
 
-        #TO-DO:
-        # x remove redundant checks from finalize()
-        # x make sure additional queries are added into each function:
-        # - backgrounds? (not in _verify)
-        # - erase? verifier object erase(expected apps)
-        # - check recursion (below)
+            self.log.info("verifying devices... ")
 
-        ## Run any for pending queries
-        if self.run_queries():
-            self.verified = False
-        
-        ## Check all tasks have been completed
-        for k in ['erase', 'prepare', 'installapps']:
-            pending_tasks = self.task.list(k)
-            if pending_tasks:
-                self.verified = False      
+            # - backgrounds? (not in _verify)
+            # - erase? verifier object erase(expected apps)
+            # - check recursion (below)
 
-        ## Check verification status
-        if not self.verified:
-            self.verified = self._verify()
-        else:
-            self.log.info("all devices verified!")
+            ## Run queries (resets verification if necessary)
+            self.log.debug("verify: running queries")
+            self.run_queries()
+
+            ## Check all tasks have been completed
+            # NOTE: can return false positives if unavailable devices
+            #       are tasked
+            # TO-DO: fix unavailable device records in _verify()
+            self.log.debug("verify: checking for pending tasks...")
+            tasks_pending = False
+            for k in ['erase', 'prepare', 'installapps']:
+                _ecids = self.task.list(k)
+                _msg = "verify: pending task: {0}: {1}"
+                self.log.debug(_msg.format(k, _ecids))
+                if _ecids:
+                    tasks_pending = True
+
+            if tasks_pending:
+                self.log.info("verify: pending tasks found")
+                self.verified = False
+            else:
+                self.log.info("verify: no pending tasks")
+
+            ## Check verification status
+            if not self.verified:
+                self.verified = self._verify()
+
         
-        # re-check verification after running _verify()
-        if not self.verified:
-            self.log.info("verification failed")
-            if run:
-                self.run()
+            # re-check verification
+            if not self.verified:
+                self.log.info("verification failed...")
+                if run:
+                    self.run()
+            else:
+                self.log.info("all devices and tasks were verified!")
 
     def finalize(self):
         '''Redundant finalization checks, verify tasks completed, 
@@ -1101,19 +1213,23 @@ class DeviceManager(object):
         '''
         self.log.debug("finalizing devices")
         if self.stopped:
-            self.config.update({'finished':datetime.now()})
+            # self.config.update({'finished':datetime.now()})
             raise Stopped("finalization stopped")
 
+        # run verification
+        self.verify()
+        
         ## Check tasks for any re-tasked devices
         _retasked = set()
         if not self.verified:
-            self.verified = self._verify()
+            
             for k,v in self.task.record.items():
                 if v:
                     _retasked.update(v)
-                    self.log.debug("RETASKED: {0}: {1}".format(k,v))
+                    self.log.debug("retasked: {0}: {1}".format(k,v))
         
-        _wallpapers = {'alert': [], 'background': []}
+        _wallpapers = {'alert': DeviceList(), 
+                       'background': DeviceList()}
 
         devices = self.available()
         ## Find devices that need wallpaper
@@ -1139,6 +1255,7 @@ class DeviceManager(object):
     def run(self):
         # keep multiple managers from running simultaneously
         #   (will be changed in future version)
+        self.log.info("running automation")
         with self.lock.acquire(timeout=-1):
             if self.stopped:
                 self.log.debug("run stopped")
@@ -1188,6 +1305,7 @@ class DeviceManager(object):
                 return
             
             self.finalize()
+            self.log.info("run finished")
 
 if __name__ == '__main__':
     pass
