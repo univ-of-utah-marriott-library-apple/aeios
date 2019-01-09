@@ -11,7 +11,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.0.1'
+__version__ = '2.1.0'
 __url__ = None
 __description__ = 'Persistant Task Queue'
 __all__ = ['TaskList']
@@ -21,19 +21,23 @@ __all__ = ['TaskList']
 # 2.1.0:
 #   - added remove()
 #   - modified query to remove key if empty
-
+# 2.1.1:
+#   - added (minimal) tests in test_tasklist.py
+#   - removed finished, and other unused code
+#   - modified default logging
 
 class TaskList(object):
 
     def __init__(self, id, logger=None, **kwargs):
         if not logger:
+            fmt = '%(asctime)s %(levelname)s: %(message)s'
+            logging.basicConfig(format=fmt)
             logger = logging.getLogger(__name__)
-            logger.addHandler(logging.NullHandler())
-        self.log = logger
+        self.log = logging
 
         self.config = config.Manager("{0}.tasks".format(id), **kwargs)
         self.file = self.config.file
-        self._taskkeys = ['erase', 'prepare', 'installapps', 'finished']
+        self._taskkeys = ['erase', 'prepare', 'installapps']
         try:
             self.config.read()
         except:
@@ -73,12 +77,6 @@ class TaskList(object):
                 # leave behind any exclusions
                 self.config.update({key: list(excluded)})
                 return list(left)
-#             try:
-#                 # return existing and write empty list back to disk
-#                 return self.config.reset(key, [])
-#             except KeyError:
-#                 # no values exist on disk
-#                 return []
             return []
     
     def list(self, key, exclude=[], only=None):
@@ -110,15 +108,17 @@ class TaskList(object):
             if _items:
                 self.log.debug("adding: {0}: {1}".format(key, _items))
                 try:
-#                     self.config.add(key, list(_items))
                     self.config.add(key, _items)
                 except KeyError:
                     self.config.update({key: list(_items)})
 
     def remove(self, ecids, tasks=None, queries=None, all=False):
         '''remove specified ECID specified tasks and/or queries
+        Nothing is returned
         '''
-        # TO-DO: this needs to be tested
+        # TO-DO: 
+        #   - more tests
+        #   - document
         with self.config.lock.acquire():
             if all:
                 # remove all tasks associated with specified ECIDs
@@ -128,9 +128,11 @@ class TaskList(object):
                 for q in self.queries(only=ecids):
                     self.query(q, only=ecids)
             else:
+                # remove ECID's from specified tasks
                 if tasks:
                     for task in tasks:
                         self.get(task, only=ecids)
+                # remove ECID's from specified queries
                 if queries:
                     for q in queries:
                         self.query(q, only=ecids)
@@ -215,21 +217,6 @@ class TaskList(object):
                 self.add('installapps', ecids, exclude)
             else:
                 return self.get('installapps', exclude, only)
-
-    def finished(self, ecids=[], exclude=[], only=None):
-        '''Convenience function for add('finished') and get('finished')
-
-        task.finished(ecids=[ecid, ...], exclude=[ecid,...])
-            == task.add('finished', ecids, exclude=[ecid, ...])
-
-        task.finished(exclude=[ecid,...])
-            == task.get('finished', exclude=[ecid, ...])
-        '''
-        with self.config.lock.acquire():
-            if ecids:
-                self.add('finished', ecids, exclude)
-            else:
-                return self.get('finished', exclude, only)
 
 
 if __name__ == '__main__':

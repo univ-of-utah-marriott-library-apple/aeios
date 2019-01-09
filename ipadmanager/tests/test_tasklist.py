@@ -257,7 +257,7 @@ class TestTaskListBasic(BaseTestCase):
 
 class TestTaskListRemove(BaseTestCase):
 
-    # TO-DO: more tests
+    # TO-DO: write more tests
 
     def test_remove_all(self):
         ecids = self.ecids + self.only
@@ -451,63 +451,6 @@ class TestTaskListApps(BaseTestCase):
         result = self.task.installapps(exclude=['missing'])
         self.assertItemsEqual(result, expected)
         self.assertItemsEqual(self.task.list('installapps'), [])
-   
-
-class TestTaskListFinished(BaseTestCase):
-
-    def setUp(self):
-        super(self.__class__, self).setUp()
-        self.assertEquals(self.task.list('finished'), [])
-        
-    def test_finished_add(self):
-        self.task.finished(self.ecids)
-        result = self.task.list('finished')
-        self.assertItemsEqual(result, self.ecids)
-
-    def test_finished_add_duplicate(self):
-        self.task.finished(self.ecids)
-        self.task.finished(self.ecids)
-        result = self.task.list('finished')
-        self.assertItemsEqual(result, self.ecids)
-
-    def test_finished_add_empty(self):
-        self.task.finished([])
-        result = self.task.list('finished')
-        self.assertEquals(result, [])
-   
-    def test_finished_add_excluded(self):
-        excluded = [self.ecids[0]]
-        expected = [self.ecids[1]]
-        self.task.finished(self.ecids, exclude=excluded)
-        result = self.task.list('finished')
-        self.assertEquals(result, expected)
-   
-    def test_finished_add_empty_excluded(self):
-        excluded = [self.ecids[0]]
-        self.task.finished([], exclude=excluded)
-        result = self.task.list('finished')
-        self.assertEquals(result, [])
-   
-    def test_finished_get(self):
-        self.task.finished(self.ecids)
-        result = self.task.finished()
-        self.assertItemsEqual(result, self.ecids)
-        self.assertFalse(self.task.list('finished'))
-   
-    def test_finished_get_excluded(self):
-        excluded = [self.ecids[0]]
-        expected = [self.ecids[1]]
-        self.task.finished(self.ecids)
-        result = self.task.finished(exclude=excluded)
-        self.assertEquals(result, expected)
-        self.assertItemsEqual(self.task.list('finished'), excluded)
-   
-    def test_finished_get_excluded_missing(self):
-        expected = self.ecids
-        self.task.finished(self.ecids)
-        result = self.task.finished(exclude=['missing'])
-        self.assertItemsEqual(result, expected)
-        self.assertItemsEqual(self.task.list('finished'), [])
    
 
 class TestTaskListQueries(BaseTestCase):
