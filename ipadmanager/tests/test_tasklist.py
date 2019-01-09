@@ -558,12 +558,12 @@ class TestTaskListQueries(BaseTestCase):
         ecids = self.task.record['isSupervised']
         self.assertItemsEqual(ecids, self.ecids)
 
-    def test_query_emptied(self):
+    def test_query_key_deleted(self):
         self.task.query('isSupervised', self.ecids)
         result = self.task.query('isSupervised')
         self.assertEquals(self.task.queries(), [])
-        ecids = self.task.record['isSupervised']
-        self.assertItemsEqual(ecids, [])
+        with self.assertRaises(KeyError):
+            self.task.record['isSupervised']
 
     def test_query_empty(self):
         self.task.query('isSupervised', [])
@@ -587,7 +587,7 @@ class TestTaskListQueries(BaseTestCase):
 
     def test_query_exclude_all(self):
         excluded = self.ecids
-        self.task.query('isSupervised', self.ecids, excluded)
+        self.task.query('isSupervised', self.ecids, exclude=excluded)
         with self.assertRaises(KeyError):
             _list = self.task.record['isSupervised']
         self.assertEquals(self.task.queries(), [])
@@ -596,17 +596,16 @@ class TestTaskListQueries(BaseTestCase):
         self.task.query('isSupervised', self.ecids)
         excluded = ['missing']
         result = self.task.query('isSupervised', exclude=excluded)
+        self.assertItemsEqual(result, self.ecids)
         self.assertEquals(self.task.queries(), [])
-        ecids = self.task.record['isSupervised']
-        self.assertEquals(ecids, [])
+        self.assertEquals(self.task.query('isSupervised'), [])
 
     def test_query_removes_keys(self):
         self.task.query('isSupervised', self.ecids)
         excluded = ['missing']
         result = self.task.query('isSupervised', exclude=excluded)
         self.assertEquals(self.task.queries(), [])
-        self.asserFalse(self.task.record.has_key('isSupervised'))
-        self.asserFalse(self.task.record.has_key('queries'))
+        self.assertFalse(self.task.record.has_key('isSupervised'))
 
 
 class TestTaskListRepeatQueries(BaseTestCase):
