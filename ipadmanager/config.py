@@ -306,6 +306,8 @@ class Manager(object):
                     data[key].remove(value)
                 elif isinstance(data[key], dict):
                     data[key].pop(value)
+            elif value is None:
+                del(data[key])
             else:
                 if isinstance(data, list):
                     data.remove(value)
