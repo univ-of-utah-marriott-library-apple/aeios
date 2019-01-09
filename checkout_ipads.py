@@ -106,7 +106,9 @@ def daemon(logger, path):
 
         if not manager.stopped:
             try:
+                logger.debug("running idle verification")
                 manager.verify(run=True)
+                logger.debug("idle verification finished")
             except Stopped:
                 logger.info("manager was stopped")
             except Exception as e:
