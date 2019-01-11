@@ -131,6 +131,27 @@ class TestAppManager(BaseTestCase):
         with self.assertRaises(AttributeError):
             self.apps.groups({})
 
+    def test_remove_apps(self):
+        raise NotImplementedError()
+
+    def test_remove_empty(self):
+        raise NotImplementedError()
+
+    def test_remove_no_group(self):
+        raise NotImplementedError()
+
+    def test_remove_missing_group(self):
+        raise NotImplementedError()
+
+    def test_remove_non_list(self):
+        raise NotImplementedError()
+
+    def test_remove_empty_list(self):
+        raise NotImplementedError()
+
+    def test_remove_all_apps(self):
+        raise NotImplementedError()
+
 
 class TestAppManagerList(BaseTestCase):
 

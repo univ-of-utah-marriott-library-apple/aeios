@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.1.2'
+__version__ = '2.2.0'
 __url__ = None
 __description__ = 'Create sets of Apps for iPads'
 __all__ = ['AppManager']
@@ -34,6 +34,9 @@ __all__ = ['AppManager']
 #   - added tests for unknown
 # 2.1.2:
 #   - removed old unnecessary code, prepped for release
+# 2.2.0:
+#   - added remove()
+#   - added incomplete tests for remove()
 
 
 class Error(Exception):
@@ -135,6 +138,19 @@ class AppManager(object):
         else:
             # update existing group apps (excluding duplicates)
             appset = set(_apps + apps)
+            self.config.update({group: list(appset)})
+        self._record = self.config.read()
+        return list(appset)
+
+    def remove(self, group, apps):
+        '''Mechanism for removing apps from a group
+        '''
+        _apps = self.config.get(group)
+        if not _apps:
+            return []
+        else:
+            # update existing group apps (excluding duplicates)
+            appset = set(_apps) - set(apps)
             self.config.update({group: list(appset)})
         self._record = self.config.read()
         return list(appset)
