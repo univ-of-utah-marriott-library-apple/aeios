@@ -18,7 +18,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.0.8'
+__version__ = '2.0.9'
 __url__ = None
 __description__ = 'Automate the management of iOS devices'
 
@@ -41,6 +41,8 @@ __description__ = 'Automate the management of iOS devices'
 #  - changed StoppedError to Stopped
 # 2.0.8:
 #  - changed verification
+# 2.0.9:
+#  - added cfgutil check in daemon()
 
 class SignalTrap(object):
     '''Class for trapping interruptions in an attempt to shutdown
@@ -87,8 +89,15 @@ def daemon(logger, path):
     cmd = ['/usr/local/bin/cfgutil', 'exec', 
              '-a', "{0} attached".format(sys.argv[0]),
              '-d', "{0} detached".format(sys.argv[0])]
-    p = subprocess.Popen(cmd, stderr=subprocess.PIPE)
-    
+    try:
+        p = subprocess.Popen(cmd, stderr=subprocess.PIPE)
+    except OSError as e:
+        if e.errno = 2:
+            err = 'cfgutil missing... install automation tools'
+            logger.error(err)
+            raise SystemExit(err)
+        raise
+        
     if p.poll() is not None:
         err = "{0}".format(p.communicate()[1])
         logger.error(err.rstrip())
