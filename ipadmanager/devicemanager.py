@@ -316,7 +316,11 @@ class DeviceManager(object):
         # self._quarantined = set(_quarantine)
         
         self.images = self.config.get('images', _imagedir)
-        self._supervision = self.config.get('supervision', _authdir)
+        if not os.path.exists(self.images):
+            os.mkdir(self.images)
+        self.supervision = self.config.get('supervision', _authdir)
+        if not os.path.exists(self.supervision):
+            os.mkdir(self.supervision)
 
         self._device = {}
         self._erased = []
@@ -355,7 +359,7 @@ class DeviceManager(object):
         '''
         if not self._auth:
             self.log.debug("getting authorization for cfgutil")
-            dir = self._supervision
+            dir = self.supervision
         
             if not os.path.isdir(dir):
                 err = "no such directory: {0}".format(dir)
@@ -465,11 +469,11 @@ class DeviceManager(object):
         appnames = [app.get('itunesName') for app in device.apps]
             
         ## list of apps that aren't known to the Appmanager
-        _new = self.apps.unknown(device, appnames)
+        ## list of apps that aren't known to the Appmanager
+        userapps = self.apps.unknown(device, appnames)
         # only report if new apps were found
-        if _new:
+        if userapps:
             # TO-DO: design mechanism for tracking repeat installations
-            userapps = [str(x) for x in _new]
             smsg = "new user apps: {0}".format(userapps)
             msg = "NEW: {0}: {1}".format(device.name, smsg)
             self.log.info(msg)
@@ -511,7 +515,7 @@ class DeviceManager(object):
                 _use_tethering = False
             except Exception as e:
                 self.log.error("unexpected error occurred: {0!s}".format(e))
-                raise
+                raise e
 
         if _use_tethering:
             self.log.debug("using tethering")
@@ -807,7 +811,7 @@ class DeviceManager(object):
             # unknown error
             self.log.error("erase: unexpected error: {0!s}".format(e))
             failed = ecids
-            raise
+            raise e
 
         finally:
             if failed:
@@ -920,7 +924,7 @@ class DeviceManager(object):
         except Exception as e:
             self.log.error("prepare: unexpected error: {0!s}".format(e))
             failed = e.ecids
-            raise
+            raise e
 
         finally:
             # re-task any failed devices
@@ -968,7 +972,7 @@ class DeviceManager(object):
             except Exception as e:
                 err = "installapps: unexpected error: {0!s}".format(e)
                 self.log.error(err)
-                raise
+                raise e
         self.task.query('installedApps', devices.ecids())
         
     def set_background(self, devices, _type):
@@ -1013,6 +1017,9 @@ class DeviceManager(object):
         except KeyError as e:
             self.log.error("no image for: {0}".format(e))
             return
+
+    def managed(self, device):
+        return True
 
     @property
     def verified(self):

@@ -92,7 +92,7 @@ def daemon(logger, path):
     try:
         p = subprocess.Popen(cmd, stderr=subprocess.PIPE)
     except OSError as e:
-        if e.errno = 2:
+        if e.errno == 2:
             err = 'cfgutil missing... install automation tools'
             logger.error(err)
             raise SystemExit(err)

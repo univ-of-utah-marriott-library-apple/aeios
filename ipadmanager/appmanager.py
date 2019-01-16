@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.2.0'
+__version__ = '2.2.1'
 __url__ = None
 __description__ = 'Create sets of Apps for iPads'
 __all__ = ['AppManager']
@@ -38,7 +38,10 @@ __all__ = ['AppManager']
 #   - added remove()
 #   - added incomplete tests for remove()
 
-
+# 2.2.1:
+#   - added ipad8,1 model identifier (this needs to be fed in elsewhere)
+#   TO-DO:
+#       - needs to check for missing device identifiers per launch
 class Error(Exception):
     pass
 
@@ -46,6 +49,7 @@ class Error(Exception):
 class AppManager(object):
     
     default = {'groups':{'model':{'iPad7,3':['iPadPros'],
+                                  'iPad8,1':['iPadPros'],
                                   'iPad7,5':['iPads']}}, 
                'all':[], 
                'all-iPads':[], 
