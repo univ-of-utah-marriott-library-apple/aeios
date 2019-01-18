@@ -24,13 +24,12 @@ __email__ = "sam.forester@utah.edu"
 __copyright__ = ("Copyright (c) 2019 "
                  "University of Utah, Marriott Library")
 __license__ = 'MIT'
-__version__ = '2.5.1'
+__version__ = '2.5.2'
 __url__ = None
 __all__ = [
     'DeviceManager', 
     'Stopped',
-    'DeviceList'
-]
+    'DeviceList']
 
 ## CHANGELOG:
 # 2.0.1:
@@ -236,10 +235,6 @@ class Error(Exception):
 class Stopped(Error):
     '''Exception to interrupt and signal to other DeviceManagers
     '''
-    def __init__(self, message, reason=None):
-        super(self.__class__, self).__init__(message)
-        self.reason = reason
-
     def __str__(self):
         return "STOPPED: " + str(self.message)
 
@@ -274,7 +269,8 @@ class DeviceManager(object):
         if not logger:
             # create null logger if one wasn't specified
             logger = logging.getLogger(__name__)
-            logger.addHandler(logging.NullHandler())
+            if not logger.handlers:
+                logger.addHandler(logging.NullHandler())
         self.log = logger
 
         self.lock = config.FileLock('/tmp/ipadmanager', timeout=5)
@@ -282,11 +278,12 @@ class DeviceManager(object):
 
         # paths to various resources
         self.resources = os.path.dirname(self.config.file)
-        self._devicepath = os.path.join(self.resources, 'devices')
-        self._cfgutillog = os.path.join(self.resources, 'log/cfgexec.log')
-        self.profiles = os.path.join(self.resources, 'profiles')
-        _imagedir = os.path.join(self.resources, 'images')
-        _authdir = os.path.join(self.resources, 'supervision')
+        r = self._setup()
+        self._devicepath = r['Devices']
+        self.profiles = r['Profiles']
+        self.images = r['Images']
+        self.supervision = r['Supervision']
+        self.logs = r['Logs']
 
         try:
             self.config.read()
@@ -294,46 +291,46 @@ class DeviceManager(object):
             self.log.error(e)
             self.config.write({})
         
-        try:
-            os.mkdir(self._devicepath)
-        except OSError as e:
-            # re-raise errors if not EEXIST or 
-            if e.errno != 17 and not os.path.isdir(self._devicepath):
-                self.log.error(e)
-                raise
-
         self.task = TaskList(id, path=self.resources, logger=self.log)
         self.apps = AppManager(id, path=self.resources, logger=self.log)
 
-        _reporting = self.config.get('reporting', {'Slack': {}})
+        self._lookup = self.config.setdefault('Devices', {})
+        self.idle = self.config.setdefault('Idle', 300)
+
+        _reporting = self.config.get('Reporting', {'Slack': {}})
         self.log.debug("reporting: {0}".format(_reporting))
         self.report = reporting.reporterFromSettings(_reporting, 
                                                         self.log)
-        
-        self._lookup = self.config.setdefault('devices', {})
-        self.idle = self.config.setdefault('idle', 300)
-        # _quarantine = self.config.setdefault('quarantine', [])
-        # self._quarantined = set(_quarantine)
-        
-        self.images = self.config.get('images', _imagedir)
-        if not os.path.exists(self.images):
-            os.mkdir(self.images)
-        self.supervision = self.config.get('supervision', _authdir)
-        if not os.path.exists(self.supervision):
-            os.mkdir(self.supervision)
 
+        self._cfgutillog = os.path.join(self.logs, 'cfgexec.log')        
         self._device = {}
         self._erased = []
         self._list = None
         self._auth = None
 
+    def _setup(self):
+        '''Various validation of internal setup
+        '''
+        ## verify resource files and directories
+        r = ['Devices', 'Supervision', 'Images', 'Profiles', 'Logs']
+        defaults = {}
+        for name in r:
+            path = os.path.join(self.resources, name)
+            defaults[name] = path
+            if not os.path.isdir(path):
+                os.mkdir(path)
+            
+        ## verify Accessibility access
+        ## verify VPP account (if possible)
+        return defaults
+
     @property
     def stopped(self):
-        return self.config.get('stopped', False)
+        return self.config.get('Stopped', False)
     
     @stopped.setter
     def stopped(self, value):
-        self.config.update({'stopped': value})
+        self.config.update({'Stopped': value})
 
     def stop(self, reason=None):
         '''stops other manager instances from performing tasks
@@ -342,9 +339,10 @@ class DeviceManager(object):
         # 
         self.stopped = True
         if reason:
-            self.config.update({'reason':reason})
-        self.log.error("STOPPED")
-        raise Stopped("Hold the press!")
+            self.config.update({'StopReason': reason})
+        _reason = reason if reason else 'no reason specified'
+        self.log.debug("stopping for {0}".format(_reason))
+        raise Stopped(_reason)
 
     def manage(self, device):
         '''Placeholder for future management check
@@ -382,7 +380,7 @@ class DeviceManager(object):
         if ecids is None:
             if not self._lookup:
                 self.log.debug("lookup was reset... refreshing")
-                self._lookup = self.config.get('devices', {})
+                self._lookup = self.config.get('Devices', {})
             ecids = self._lookup.keys()
 
         try:
@@ -441,9 +439,9 @@ class DeviceManager(object):
         lock = config.FileLock('/tmp/new-device', timeout=5)
         # update serialized lookup table and force a cache refresh
         with lock.acquire():
-            _lookup = self.config.get('devices', {})
+            _lookup = self.config.get('Devices', {})
             _lookup.update({ecid: udid})
-            self.config.update({'devices': _lookup})
+            self.config.update({'Devices': _lookup})
             # force a refreshed lookup first time findall() is called
             self._lookup = {}
             self._device[ecid] = _device
@@ -491,7 +489,7 @@ class DeviceManager(object):
         if refresh or not self._list or (_stale > _lastlisted):
             self.log.info("refreshing device list")
             self._list = cfgutil.list(log=self.log)
-            self.config.update({'lastListed': now})
+            self.config.update({'lastListed':now})
         return self._list
 
     def need_to_erase(self, device):
@@ -541,7 +539,7 @@ class DeviceManager(object):
         else:
             # too hidden for my liking, but whatever
             self.log.debug("using wifi profile")
-            wifi = os.path.join(self.profiles, 'tmpWifi.mobileconfig')
+            wifi = os.path.join(self.profiles, 'wifi.mobileconfig')
             cfgutil.install_wifi_profile(devices.ecids(), wifi, 
                                     log=self.log, file=self._cfgutillog)
             time.sleep(2)
@@ -613,17 +611,18 @@ class DeviceManager(object):
             self.log.info("{0}: checked out".format(device.name))            
             device.checkout = datetime.now()
 
-    def waitfor(self, device, reason):
+    def waitfor(self, device, reason, wait=120):
         '''Placeholder for waiting for restart
         '''
+        _reason = 'StopReason'
         # if stopped, but we don't have a reason
-        if self.stopped and not self.config.get('reason'):
+        if self.stopped and not self.config.get(_reason):
             self.log.debug("stopped for no reason...")
             self.stopped = False
             return
 
         self.log.debug("instructed to wait for: {0}".format(reason))
-        if reason != self.config.get('reason'):
+        if reason != self.config.get(_reason):
             raise Stopped("not stopped for: {0}".format(reason))
 
         # get this device's ecid out of the queue (if it's there)
@@ -637,12 +636,12 @@ class DeviceManager(object):
         with lock.acquire(timeout=-1):
             waiting = self.task.list(reason)
             if not waiting:                
-                if self.stopped and self.config.get('reason'):
+                if self.stopped and self.config.get(_reason):
                     self.stopped = False
-                    self.config.delete('reason')
+                    self.config.delete(_reason)
                 return
 
-            stoptime = datetime.now() + timedelta(seconds=30)
+            stoptime = datetime.now() + timedelta(seconds=wait)
             while waiting:
                 time.sleep(2)
                 self.log.debug("waiting on {0}: {1}".format(reason, 
@@ -653,7 +652,7 @@ class DeviceManager(object):
                     self.log.debug("gave up waiting")
                     break                            
             self.stopped = False
-            self.config.delete('reason')
+            self.config.delete(_reason)
 
     def run_queries(self):
         '''runs tasked queries using cfgutil
