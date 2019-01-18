@@ -2,34 +2,60 @@
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>Supervision</key>
+	<key>Groups</key>
 	<dict>
-		<key>DEP</key> 
-		<true/>
-		<key>SkipLanguageAndLocale</key> 
-		<true/>
-	</dict>
-	<key>Supervision</key>
-	<dict>
-		<key>email</key> 
-		<string></string>
-		<key>magic</key> 
-		<string></string>
-		<key>HostCert</key> 
-		<string></string>
-		<key>mdmUrl</key> 
-		<string></string>
-		<key>name</key> 
-		<string></string>
-		<key>SkipLanguageAndLocale</key> 
-		<true/>
-		<!-- list of Setup Assistant panes to skip -->
-		<!-- see `cfgutil help prepare` for list of skipable panes -->
-		<key>Skip</key> 
+		<key>iPadPros</key>
 		<array>
-			<string>skip-all</string>
+			<string>iPad6,7</string>
+			<string>iPad6,8</string>
+			<string>iPad7,1</string>
+			<string>iPad7,2</string>
+			<string>iPad7,3</string>
+			<string>iPad7,4</string>
+			<string>iPad8,1</string>
+			<string>iPad8,2</string>
+			<string>iPad8,3</string>
+			<string>iPad8,4</string>
+			<string>iPad8,5</string>
+			<string>iPad8,6</string>
+			<string>iPad8,7</string>
+			<string>iPad8,8</string>
+		</array>
+		<key>iPads</key>
+		<array>
+			<string>iPad1,1</string>
+			<string>iPad2,1</string>
+			<string>iPad2,3</string>
+			<string>iPad2,4</string>
+			<string>iPad3,1</string>
+			<string>iPad3,2</string>
+			<string>iPad3,3</string>
+			<string>iPad3,4</string>
+			<string>iPad3,5</string>
+			<string>iPad3,6</string>
+			<string>iPad4,1</string>
+			<string>iPad4,2</string>
+			<string>iPad4,3</string>
+			<string>iPad5,3</string>
+			<string>iPad5,4</string>
+		</array>
+		<key>iPadMinis</key>
+		<array>
+			<string>iPad2,5</string>
+			<string>iPad2,6</string>
+			<string>iPad2,7</string>
+			<string>iPad4,4</string>
+			<string>iPad4,5</string>
+			<string>iPad4,6</string>
+			<string>iPad4,7</string>
+			<string>iPad4,8</string>
+			<string>iPad4,9</string>
+			<string>iPad5,1</string>
+			<string>iPad5,2</string>
 		</array>
 	</dict>
+	<key>Idle</key>
+	<integer>300</integer>
 	<key>Reporting</key>
 	<dict>
 		<key>Slack</key> 
@@ -42,19 +68,55 @@
 			<string>{url}</string>
 		</dict>
 	</dict>
+<!-- Not Implemented 
 	<key>Devices</key>
 	<dict>
-		<key>managed</key>
+		<key>Managed</key>			<!-- Automation Performed-->
 		<array>
-			<!-- List of managed device serial numbers -->
-			<string>{SN1}</string>
-			<string>{SN2}</string>
-			<string>{SN3}</string>
+			<string>{ECID}</string>
+			<string>{ECID2}</string>
+			<string>{ECID3}</string>
+		</array>
+		<key>Ignored</key>			<!-- Automation Skipped -->
+		<array>
+			<string>{ECID4}</string>
+			<string>{ECID5}</string>
 		</array>
 		<!-- Whether or not to automatically manage new devices -->
-		<key>AutoDiscover</key>
-		<true/>
+		<key>AutoManageNewDevices</key>
+		<false/>
 	</dict>
+-->
+<!-- Not Implemented
+	<key>Supervision</key>
+	<dict>
+		<key>DEP</key> 
+		<true/>
+		<key>SkipLanguageAndLocale</key> 
+		<true/>
+		<key>Manual</key>
+		<dict>
+			<key>email</key> 
+			<string></string>
+			<key>magic</key> 
+			<string></string>
+			<key>HostCert</key> 
+			<string></string>
+			<key>mdmUrl</key> 
+			<string></string>
+			<key>name</key> 
+			<string></string>
+			<key>SkipLanguageAndLocale</key> 
+			<true/>			
+			<key>Skip</key><!-- Skipped Setup Assistant panes-->
+			<array>
+				<string>skip-all</string>
+                <!-- see `cfgutil help prepare` for list of skipable panes -->
+			</array>
+		</dict>
+	</dict>
+-->
+<!-- Not Implemented
 	<key>Network</key>
 	<dict>
 		<!-- whether or not to attempt to use tethering -->
@@ -71,6 +133,8 @@
 			<true/>
 		</dict>
 	</dict>
+-->
+<!-- Not Implemented
 	<key>Images</key>
 	<dict>
 		<key>InProgress</key> 
@@ -82,6 +146,8 @@
 		<key>Locked</key> 
 		<string>alert.png</string>
 	</dict>
+-->
+<!-- Not Implemented
 	<key>Tasks</key>
 	<array>
 		<string>erase</string>
@@ -89,5 +155,6 @@
 		<string>background</string>
 		<string>apps</string>
 	</array>
+-->
 </dict>
 </plist>

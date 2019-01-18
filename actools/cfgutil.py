@@ -81,9 +81,11 @@ CFGUTILBIN = '/usr/local/bin/cfgutil'
 #     err = "{0}: missing executable".format(CFGUTILBIN)
 #     raise RuntimeError(err)
 
-
 class Error(Exception):
+    pass
 
+
+class CfgutilError(Error):
     def __init__(self, info, msg='', cmd=None):
         if not cmd:
             cmd = inspect.stack()[1][3]
@@ -113,17 +115,15 @@ class Error(Exception):
         return _repr.format(__name__, 'Error', id(self), _dict)
 
 
-class FatalError(Error):
+class FatalError(CfgutilError):
     '''Raised when execution of cfgutil completely fails
     '''
     pass
 
 
-class CfgutilError(Error):
-    '''Raised when execution of cfgutil partially fails
-    '''
+class AuthenticationError(Error):
     pass
-    
+
 
 class Result(object):
     def __init__(self, cfgout, ecids=[], err=[], cmd=[]):
@@ -141,29 +141,40 @@ class Result(object):
 
 class Authentication(object):
 
-    def __init__(self, cert, pkey, log=None):
+    def __init__(self, key, cert, log=None):
         if not log:
             import logging
             self.log = logging.getLogger(__name__)
-            self.log.addHandler(logging.NullHandler())
-        for file in [cert, pkey]:
-            if not os.path.exists(file):
-                err = "missing file: {0}".format(file)
-                log.error(err)
-                raise RuntimeError(err)
-            ## check file mode
-            st_mode = os.stat(file).st_mode
-            ## stat.S_IREAD|stat.S_IWRITE == 0600 (-rw-------)
-            o_rw = stat.S_IREAD | stat.S_IWRITE
-            if stat.S_IMODE(st_mode) != o_rw:
-                os.chmod(file, 0o0600)
+            if not self.log.handlers:
+                self.log.addHandler(logging.NullHandler())
+        ## verify each file
+        for file in (key, cert):
+            self._verify(file)
+        self.key = key
         self.cert = cert
-        self.key = pkey
+    
+    def _verify(self, file):
+        '''verify file exists and has the correct permissions
+        '''
+        if not os.path.exists(file):
+            e = "no such file: {0}".format(file)
+            self.log.error(e)
+            raise Error(e)
+        ## check file permissions are 0600 ~ '-rw-------'
+        mode = stat.S_IMODE(os.stat(file).st_mode)
+        if mode != (stat.S_IREAD|stat.S_IWRITE):
+            e = "invalid permissions: {0:04do}: {1}".format(mode, file)
+            self.log.error(e)
+            raise AuthenticationError(e)
     
     def args(self):
         '''returns list of arguments for cfgutil()
         '''
         return ['-C', self.cert, '-K', self.key]
+
+
+class Authorization(Authentication):
+    pass
 
 
 def requires_authentication(subcmd):
