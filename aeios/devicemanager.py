@@ -23,7 +23,11 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = ("Copyright (c) 2019 "
                  "University of Utah, Marriott Library")
+<<<<<<< HEAD:aeios/devicemanager.py
 __license__ = "MIT"
+=======
+__license__ = 'MIT'
+>>>>>>> b182e541967a02a8d2a2bdfa8e0d80bcda946460:aeios/devicemanager.py
 __version__ = '2.5.2'
 __url__ = None
 __all__ = [
