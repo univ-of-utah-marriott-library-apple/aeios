@@ -23,12 +23,8 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = ("Copyright (c) 2019 "
                  "University of Utah, Marriott Library")
-<<<<<<< HEAD:aeios/devicemanager.py
-__license__ = "MIT"
-=======
 __license__ = 'MIT'
->>>>>>> b182e541967a02a8d2a2bdfa8e0d80bcda946460:aeios/devicemanager.py
-__version__ = '2.5.2'
+__version__ = '2.5.3'
 __url__ = None
 __all__ = [
     'DeviceManager', 
@@ -243,6 +239,9 @@ __all__ = [
 #       - added wait keyword
 #       - increased default wait time
 
+# 2.5.3:
+#
+
 class Error(Exception):
     pass
 
@@ -257,7 +256,31 @@ class Stopped(Error):
 class DeviceList(list):
     '''convenience class for getting various properties of devices in
     a list
-    '''    
+    '''
+    def __init__(self, *args, delegate=None):
+        list.__init__(self, *args)
+        
+        
+        
+    def refresh(self):
+        '''Returns list of attached devices using cfgutil.list()
+        '''
+        # attempt to keep listing down to once per 30 seconds
+        now = datetime.now()
+        _stale = now - timedelta(seconds=30)
+        _lastlisted = self.config.get('lastListed')
+        if refresh or not self._list or (_stale > _lastlisted):
+            self.log.info("refreshing device list")
+            self._list = cfgutil.list(log=self.log)
+            self.config.update({'lastListed':now})
+        return self._list
+        pass
+    
+    def available(self):
+        # refresh the list
+        self.refresh()
+        pass
+    
     def ecids(self):
         return [x.ecid for x in self]
     
@@ -275,6 +298,9 @@ class DeviceList(list):
 
     def supervised(self):
         return DeviceList([x for x in self if x.supervised])
+    
+    def __repr__(self):
+        return "DeviceList({0})".format(self.names())
 
 
 class DeviceManager(object):
@@ -294,7 +320,7 @@ class DeviceManager(object):
         # paths to various resources
         self.resources = os.path.dirname(self.config.file)
         r = self._setup()
-        self._devicepath = r['Devices']
+        # self._devicepath = r['Devices']
         self.profiles = r['Profiles']
         self.images = r['Images']
         self.supervision = r['Supervision']
@@ -765,6 +791,28 @@ class DeviceManager(object):
         # forward along the results for processing elsewhere
         return result
 
+    def restart(self, devices):
+        self.log.debug("restarting: {0}".format(devices.names()))
+        if self.stopped:
+            raise Stopped("skipping restart")
+        restartable = devices.supervised()
+        if not restartable:
+            self.log.info("no devices can be restarted")
+            return
+
+        for device in restartable:
+            device.restarting = True
+
+        ecids = restartable.ecids()
+        cfgresult = cfgutil.cfgutil('restart', restartable.ecids(), 
+                                    log=self.log, file=self._cfgutillog,
+                                    auth=self.authorization())
+        for device in restartable:
+            device.restarting = False
+
+        self.task.add('restart', ecids)
+        self.stop(reason='restart')
+        
     def erase(self, devices):
         '''Erase specified devices and mark them for preparation
         '''
@@ -910,24 +958,24 @@ class DeviceManager(object):
                 # tethering.stop(self.log) # doesn't fix
                 # SOLUTION: installing Wi-Fi profile works
                 # TO-DO: Retry mechanism
-                
-                # too nested for my liking
-                try:
-                    self.log.debug("attempting to recover")
-                    self.check_network(self.findall(ecids), 
-                                              tethered=False)
-                    result = cfgutil.prepareDEP(ecids, log=self.log, 
-                                        file=self._cfgutillog)
-                    prepared, failed = result.ecids, result.missing
-                except cfgutil.FatalError as e:
-                    err = "recovery partially failed: {0!s}".format(e)
-                    self.log.err(err)
-                    failed = e.ecids
-                except cfgutil.CfgutilError as e:                    
-                    err = "recovery partially failed: {0!s}".format(e)
-                    self.log.err(err)
-                    prepared = e.unaffected
-                    failed = e.affected
+                pass
+#                 too nested for my liking
+#                 try:
+#                     self.log.debug("attempting to recover")
+#                     self.check_network(self.findall(ecids), 
+#                                               tethered=False)
+#                     result = cfgutil.prepareDEP(ecids, log=self.log, 
+#                                         file=self._cfgutillog)
+#                     prepared, failed = result.ecids, result.missing
+#                 except cfgutil.FatalError as e:
+#                     err = "recovery partially failed: {0!s}".format(e)
+#                     self.log.error(err)
+#                     failed = e.ecids
+#                 except cfgutil.CfgutilError as e:                    
+#                     err = "recovery partially failed: {0!s}".format(e)
+#                     self.log.error(err)
+#                     prepared = e.unaffected
+#                     failed = e.affected
             else:
                 # put everything back into the queue
                 failed = e.ecids
@@ -988,6 +1036,7 @@ class DeviceManager(object):
                 self.log.error(err)
                 raise e
         self.task.query('installedApps', devices.ecids())
+        return devices
         
     def set_background(self, devices, _type):
         '''set the background of the specified devices
@@ -1318,7 +1367,7 @@ class DeviceManager(object):
             except Stopped as e:
                 self.log.info(e)
                 return
-
+            
             try:
                 self.installapps(devices)
             except Stopped as e:
