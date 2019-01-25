@@ -240,7 +240,7 @@ __all__ = [
 #       - increased default wait time
 
 # 2.5.3:
-#
+# minor bug fixes
 
 class Error(Exception):
     pass
@@ -256,31 +256,7 @@ class Stopped(Error):
 class DeviceList(list):
     '''convenience class for getting various properties of devices in
     a list
-    '''
-    def __init__(self, *args, delegate=None):
-        list.__init__(self, *args)
-        
-        
-        
-    def refresh(self):
-        '''Returns list of attached devices using cfgutil.list()
-        '''
-        # attempt to keep listing down to once per 30 seconds
-        now = datetime.now()
-        _stale = now - timedelta(seconds=30)
-        _lastlisted = self.config.get('lastListed')
-        if refresh or not self._list or (_stale > _lastlisted):
-            self.log.info("refreshing device list")
-            self._list = cfgutil.list(log=self.log)
-            self.config.update({'lastListed':now})
-        return self._list
-        pass
-    
-    def available(self):
-        # refresh the list
-        self.refresh()
-        pass
-    
+    '''    
     def ecids(self):
         return [x.ecid for x in self]
     
@@ -320,7 +296,7 @@ class DeviceManager(object):
         # paths to various resources
         self.resources = os.path.dirname(self.config.file)
         r = self._setup()
-        # self._devicepath = r['Devices']
+        self._devicepath = r['Devices']
         self.profiles = r['Profiles']
         self.images = r['Images']
         self.supervision = r['Supervision']
@@ -791,28 +767,6 @@ class DeviceManager(object):
         # forward along the results for processing elsewhere
         return result
 
-    def restart(self, devices):
-        self.log.debug("restarting: {0}".format(devices.names()))
-        if self.stopped:
-            raise Stopped("skipping restart")
-        restartable = devices.supervised()
-        if not restartable:
-            self.log.info("no devices can be restarted")
-            return
-
-        for device in restartable:
-            device.restarting = True
-
-        ecids = restartable.ecids()
-        cfgresult = cfgutil.cfgutil('restart', restartable.ecids(), 
-                                    log=self.log, file=self._cfgutillog,
-                                    auth=self.authorization())
-        for device in restartable:
-            device.restarting = False
-
-        self.task.add('restart', ecids)
-        self.stop(reason='restart')
-        
     def erase(self, devices):
         '''Erase specified devices and mark them for preparation
         '''
@@ -1036,7 +990,6 @@ class DeviceManager(object):
                 self.log.error(err)
                 raise e
         self.task.query('installedApps', devices.ecids())
-        return devices
         
     def set_background(self, devices, _type):
         '''set the background of the specified devices
@@ -1367,7 +1320,7 @@ class DeviceManager(object):
             except Stopped as e:
                 self.log.info(e)
                 return
-            
+
             try:
                 self.installapps(devices)
             except Stopped as e:
