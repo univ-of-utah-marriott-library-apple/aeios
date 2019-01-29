@@ -24,7 +24,7 @@ __email__ = "sam.forester@utah.edu"
 __copyright__ = ("Copyright (c) 2019 "
                  "University of Utah, Marriott Library")
 __license__ = 'MIT'
-__version__ = '2.5.3'
+__version__ = '2.5.4'
 __url__ = None
 __all__ = [
     'DeviceManager', 
@@ -241,6 +241,10 @@ __all__ = [
 
 # 2.5.3:
 # minor bug fixes
+
+# 2.5.4:
+# - re-worked need_to_erase() and checkin
+# - now allows for a grace period of 5 minutes for checkouts
 
 class Error(Exception):
     pass
@@ -513,9 +517,47 @@ class DeviceManager(object):
         '''Reserved for future conditional erasing
         Returns True (for now)
         '''
-        device.delete('erased')
-        self.task.query('installedApps', [device.ecid])
-        return True
+        name = device.name
+        # device has NEVER checked in
+        if not device.checkin:
+            self.log.debug("{0}: brand new device found!".format(name))
+            return True
+        now = datetime.now()
+        
+        # device has NOT been erased
+        if not device.erased:
+            self.log.debug("{0}: has never been erased".format(name))
+            return True
+        elif device.erased > (now - timedelta(minutes=10)):
+            # device has been erased in the last 10 minutes
+            _msg = "{0}: was erased less than 10 minutes ago..."
+            self.log.debug(_msg.format(name))
+            self.verified = False
+            return False
+                
+        try:
+            # if the device has been checked out since last checkin
+            if device.checkout > device.checkin:
+                # see if checkout happened less than 5 minutes ago
+                time_away = now - device.checkout
+                if time_away > timedelta(minutes=5):
+                    _msg = "{0}: checked out for more than 5 minutes"
+                    self.log.debug(_msg.format(name))
+                    return True
+                else:
+                    # reset checkout to 1 minute before last checkin
+                    recover = device.checkin - timedelta(minutes=1)
+                    _msg = "re-writing checkout: {0}"
+                    self.log.debug(_msg.format(recover))
+                    device.checkout = recover
+                    self.log.debug("will re-verify devices...")
+                    self.verified = False
+        except TypeError:
+            self.log.debug("{0}: never checked out".format(name))
+            # create dummy checkout 1 minute before checkin
+            device.checkout = device.checkin - timedelta(minutes=1)
+        
+        return False        
 
     def check_network(self, devices, tethered=True):    
         # TO-DO: this needs to be tested to see that if tethering fails
@@ -566,9 +608,7 @@ class DeviceManager(object):
         '''
         device = self.device(info['ECID'], info)
         
-        # mechanism to stall while devices restart
-        if self.stopped:
-            self.waitfor(device, 'restart')                
+        ## Pre-checkin
 
         # clearer logging
         if device.name.startswith('iPad'):
@@ -576,43 +616,24 @@ class DeviceManager(object):
             name = "{0} ({1})".format(device.name, device.ecid)
         else:
             name = device.name
-
-        ## Pre-checkin
-
-        # this needs to be re-worked
-        reset = False
-        if not device.checkin:
-            # first time seeing the device
-            self.log.debug("{0}: new device found!".format(name))
-            if self.managed(device):
-                reset = self.need_to_erase(device)
-        else:
-            try:
-                # see if the device was checked since last checkin
-                checkedout = device.checkout > device.checkin
-            except TypeError:
-                self.log.debug("{0}: never checked out".format(name))
-                checkedout = False
-            
-            if checkedout:
-                self.log.info("{0}: was checked out".format(name))
-                reset = self.need_to_erase(device)
-                self.verified = False
-            else:
-                self.log.info("{0}: was not checked out".format(name))
-
-        # if device needs to be erased
-        if reset:
-            self.log.debug("{0}: will be reset".format(name))
+        
+        ## Determine action
+        if self.stopped:
+            # mechanism to stall while devices restart
+            self.waitfor(device, 'restart')
+        
+        if self.need_to_erase(device):
+            self.log.debug("{0}: will be erased".format(name))
             self.task.erase([device.ecid])
             self.task.query('installedApps', [device.ecid])
-            device.checkin = datetime.now()
         else:
             self.log.debug("{0}: will not be reset".format(name))
-            
+        
+        device.checkin = datetime.now()
+        
         if run:
             self.run()
-
+        
     def checkout(self, info):
         '''saves timestamp of device checkout (if not restarting)
         '''
@@ -660,9 +681,9 @@ class DeviceManager(object):
 
             stoptime = datetime.now() + timedelta(seconds=wait)
             while waiting:
-                time.sleep(2)
-                self.log.debug("waiting on {0}: {1}".format(reason, 
-                                                            waiting))
+                time.sleep(5)
+                msg = "waiting on {0}: {1}".format(reason, waiting)
+                self.log.debug(msg)
                 waiting = self.task.list(reason)
                 if datetime.now() > stoptime:
                     ecids = self.task.get(reason)
@@ -788,6 +809,7 @@ class DeviceManager(object):
         for device in self.findall(ecids):
             self.log.debug("found device: {0}".format(device.name))
             device.restarting = True
+            device.delete('erased')
     
         
         excluded = []
@@ -823,13 +845,17 @@ class DeviceManager(object):
             erased = e.unaffected
             failed = e.affected
 
-        except Exception as e:
-            # unknown error
-            self.log.error("erase: unexpected error: {0!s}".format(e))
-            failed = ecids
-            raise e
+#         except Exception as e:
+#             # unknown error
+#             self.log.error("erase: unexpected error: {0!s}".format(e))
+#             failed = ecids
+#             raise e
 
         finally:
+            if not erased:
+                # if nothing was erased, then assume everything failed
+                failed = ecids
+                
             if failed:
                 _devices = self.findall(failed)
                 names = _devices.names()
@@ -1140,8 +1166,6 @@ class DeviceManager(object):
         # NOTE:  probably don't need to fail verification
 
         ## Check unavailable devices        
-        unavailable = self.findall(exclude=available)
-
         remove_pending = []
         for device in self.findall(exclude=available):
             # skip restarting devices
@@ -1150,13 +1174,14 @@ class DeviceManager(object):
 
             # sanitize unavailable device records
             remove_pending.append(device.ecid)
+
             if not device.checkout:
                 self.log.error("device was never checked out")
                 device.checkout = datetime.now()
-                self.task.remove(all=True)
+                #self.task.remove([device.ecid], all=True)
         
         ## remove all pending tasks and queries for missing devices
-        self.log.debug("removing unavailable tasks")
+        self.log.debug("removing task for unavailable devices")
         self.task.remove(remove_pending, all=True)
 
         ## Re-task anything that failed verification
