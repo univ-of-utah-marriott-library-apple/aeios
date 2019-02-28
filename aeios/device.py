@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.4.0'
+__version__ = '2.5.0'
 __url__ = None
 __description__ = 'Persistant iOS device record'
 __all__ = ['Device', 'DeviceError']
@@ -27,6 +27,11 @@ __all__ = ['Device', 'DeviceError']
 #   - added supervised property
 # 2.4.0:
 #   - modified app property to be more informative
+# 2.5.0:
+#   - added verified property
+#   - changed record identity from UDID to ECID
+#   - modified Device.__init__():
+#       - removed superfluous error checking
 
 class Error(Exception):
     pass
@@ -38,21 +43,18 @@ class DeviceError(Error):
 
 class Device(object):
 
-    def __init__(self, udid, info={}, logger=None, **kwargs):
+    def __init__(self, ecid, info={}, logger=None, **kwargs):
         _info = info.copy()
-        _udid = _info.get('UDID')
-        if udid and _udid and _udid != udid:
-            raise DeviceError("UDID mismatch")
 
-        if not _info.setdefault('UDID', udid):
-            raise DeviceError("missing device UDID")
+        if not _info.setdefault('ECID', ecid):
+            raise DeviceError("missing device ECID")
 
         if not logger:
             logger = logging.getLogger(__name__)
             logger.addHandler(logging.NullHandler())
         self.log = logger
 
-        self.config = config.Manager(udid, **kwargs)
+        self.config = config.Manager(ecid, **kwargs)
         self.file = self.config.file
         
         try:
@@ -63,7 +65,7 @@ class Device(object):
             self._record = self.config.read()
         except Exception as e:
             self.log.error("unknown error: {0!s}".format(e))
-            raise DeviceError(str(e))
+            raise DeviceError(e)
 
         # make sure non-changing values are what we expect them to be
         self._verify(_info)        
@@ -126,6 +128,16 @@ class Device(object):
         if attribute:
             setattr(self, attribute, value)
         self.config.update({key: value})
+
+    @property
+    def verified(self):
+        return self.config.setdefault('verified', False)
+
+    @verified.setter
+    def verified(self, value):
+        if not isinstance(value, bool):
+            raise TypeError("{0}: not boolean".format(value))
+        self.config.update({'verified': value})
 
     @property
     def record(self):
@@ -210,7 +222,7 @@ class Device(object):
     def erased(self, timestamp):
         self._timestamp('erased', timestamp)
         _reset = ['background', 'apps', 'enrolled', 'isSupervised', 
-                  'installedApps']
+                  'installedApps', 'verified']
         self.config.deletekeys(_reset)
 
     @property
