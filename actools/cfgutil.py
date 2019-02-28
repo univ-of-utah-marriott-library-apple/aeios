@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.3.1'
+__version__ = '2.3.2'
 __url__ = None
 __description__ = 'Execute commands with `cfgutil`'
 
@@ -72,6 +72,11 @@ __description__ = 'Execute commands with `cfgutil`'
 #   - added install_wifi_profile()
 # 2.3.1:
 #   - added Error.ecids property
+# 2.3.2:
+#   - removed Authorization()
+#   - renamed CfgutilError -> Error:
+#       - CfgutilError inherits from Error
+#       - now CfgutilFatalError will have same functions as CfgutilError
 
 TESTING = False
 CFGUTILBIN = '/usr/local/bin/cfgutil'
@@ -81,11 +86,9 @@ CFGUTILBIN = '/usr/local/bin/cfgutil'
 #     err = "{0}: missing executable".format(CFGUTILBIN)
 #     raise RuntimeError(err)
 
+
 class Error(Exception):
-    pass
 
-
-class CfgutilError(Error):
     def __init__(self, info, msg='', cmd=None):
         if not cmd:
             cmd = inspect.stack()[1][3]
@@ -115,15 +118,17 @@ class CfgutilError(Error):
         return _repr.format(__name__, 'Error', id(self), _dict)
 
 
-class FatalError(CfgutilError):
+class FatalError(Error):
     '''Raised when execution of cfgutil completely fails
     '''
     pass
 
 
-class AuthenticationError(Error):
+class CfgutilError(Error):
+    '''Raised when execution of cfgutil partially fails
+    '''
     pass
-
+    
 
 class Result(object):
     def __init__(self, cfgout, ecids=[], err=[], cmd=[]):
@@ -141,40 +146,29 @@ class Result(object):
 
 class Authentication(object):
 
-    def __init__(self, key, cert, log=None):
+    def __init__(self, cert, pkey, log=None):
         if not log:
             import logging
             self.log = logging.getLogger(__name__)
-            if not self.log.handlers:
-                self.log.addHandler(logging.NullHandler())
-        ## verify each file
-        for file in (key, cert):
-            self._verify(file)
-        self.key = key
+            self.log.addHandler(logging.NullHandler())
+        for file in [cert, pkey]:
+            if not os.path.exists(file):
+                err = "missing file: {0}".format(file)
+                log.error(err)
+                raise RuntimeError(err)
+            ## check file mode
+            st_mode = os.stat(file).st_mode
+            ## stat.S_IREAD|stat.S_IWRITE == 0600 (-rw-------)
+            o_rw = stat.S_IREAD | stat.S_IWRITE
+            if stat.S_IMODE(st_mode) != o_rw:
+                os.chmod(file, 0o0600)
         self.cert = cert
-    
-    def _verify(self, file):
-        '''verify file exists and has the correct permissions
-        '''
-        if not os.path.exists(file):
-            e = "no such file: {0}".format(file)
-            self.log.error(e)
-            raise Error(e)
-        ## check file permissions are 0600 ~ '-rw-------'
-        mode = stat.S_IMODE(os.stat(file).st_mode)
-        if mode != (stat.S_IREAD|stat.S_IWRITE):
-            e = "invalid permissions: {0:04do}: {1}".format(mode, file)
-            self.log.error(e)
-            raise AuthenticationError(e)
+        self.key = pkey
     
     def args(self):
         '''returns list of arguments for cfgutil()
         '''
         return ['-C', self.cert, '-K', self.key]
-
-
-class Authorization(Authentication):
-    pass
 
 
 def requires_authentication(subcmd):
