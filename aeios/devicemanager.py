@@ -24,7 +24,7 @@ __email__ = "sam.forester@utah.edu"
 __copyright__ = ("Copyright (c) 2019 "
                  "University of Utah, Marriott Library")
 __license__ = 'MIT'
-__version__ = '2.5.5'
+__version__ = '2.5.7'
 __url__ = None
 __all__ = [
     'DeviceManager', 
@@ -251,6 +251,8 @@ __all__ = [
 
 # 2.5.6:
 # - revamped device()
+# 2.5.7:
+# - minor bug fixes()
 
 class Error(Exception):
     pass
@@ -1102,7 +1104,9 @@ class DeviceManager(object):
             tasked = devices
 
         path = self.resources.apps
-        appfiles = [os.path.join(path, x) for x in os.listdir(path)]
+        appfiles = [os.path.join(path, x) for x in os.listdir(path)
+                                                if x.endswith('.ipa')]
+        
         
         try:
             result = cfgutil.cfgutil('install-apps', tasked.ecids, 
@@ -1111,6 +1115,7 @@ class DeviceManager(object):
         except cfgutil.Error as e:
             self.log.error(str(e))
         
+
     def installapps(self, targets):
         ## Check if manager has been stopped
         if self.stopped:
