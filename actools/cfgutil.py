@@ -77,6 +77,11 @@ __description__ = 'Execute commands with `cfgutil`'
 #   - renamed CfgutilError -> Error:
 #       - CfgutilError inherits from Error
 #       - now CfgutilFatalError will have same functions as CfgutilError
+# 2.3.3:
+#   - modified list() to use Result class
+#   - added documentation
+#
+# 2.4.0:
 
 TESTING = False
 CFGUTILBIN = '/usr/local/bin/cfgutil'
@@ -124,6 +129,10 @@ class FatalError(Error):
     pass
 
 
+class AuthenticationError(Error):
+    pass
+
+
 class CfgutilError(Error):
     '''Raised when execution of cfgutil partially fails
     '''
@@ -146,24 +155,31 @@ class Result(object):
 
 class Authentication(object):
 
-    def __init__(self, cert, pkey, log=None):
+    def __init__(self, key, cert, log=None):
         if not log:
             import logging
             self.log = logging.getLogger(__name__)
-            self.log.addHandler(logging.NullHandler())
-        for file in [cert, pkey]:
-            if not os.path.exists(file):
-                err = "missing file: {0}".format(file)
-                log.error(err)
-                raise RuntimeError(err)
-            ## check file mode
-            st_mode = os.stat(file).st_mode
-            ## stat.S_IREAD|stat.S_IWRITE == 0600 (-rw-------)
-            o_rw = stat.S_IREAD | stat.S_IWRITE
-            if stat.S_IMODE(st_mode) != o_rw:
-                os.chmod(file, 0o0600)
+            if not self.log.handlers:
+                self.log.addHandler(logging.NullHandler())
+        ## verify each file
+        for file in (key, cert):
+            self._verify(file)
+        self.key = key
         self.cert = cert
-        self.key = pkey
+    
+    def _verify(self, file):
+        '''verify file exists and has the correct permissions
+        '''
+        if not os.path.exists(file):
+            e = "no such file: {0}".format(file)
+            self.log.error(e)
+            raise Error(e)
+        ## check file permissions are 0600 ~ '-rw-------'
+        mode = stat.S_IMODE(os.stat(file).st_mode)
+        if mode != (stat.S_IREAD|stat.S_IWRITE):
+            e = "invalid permissions: {0:04do}: {1}".format(mode, file)
+            self.log.error(e)
+            raise AuthenticationError(e)
     
     def args(self):
         '''returns list of arguments for cfgutil()
@@ -220,6 +236,30 @@ def list(*args, **kwargs):
     output = cfgutil('list', *args, fmt='json', **kwargs)
     return [info for info in output['Output'].values()]
 
+def _list(*args, **kwargs):
+    '''Replacement for list() UNTESTED
+    Returns list of dicts for attached devices
+    
+    Each dict will have the following keys defined:
+        UDID, ECID, name, deviceType, locationID
+    
+    e.g.:
+    
+    >>> cfgutil.list()
+    [{'ECID': '0x123456789ABCD0',
+      'UDID': 'a0111222333444555666777888999abcdefabcde',
+      'deviceType': 'iPad7,5',
+      'locationID': 337920512,
+      'name': 'checkout-ipad-1'},
+     {'ECID': '0x123456789ABCD1',
+      'UDID': 'a1111222333444555666777888999abcdefabcde',
+      'deviceType': 'iPad8,1',
+      'locationID': 337907712,
+      'name': 'checkout-ipad-2'}, ...]
+    '''
+    result = cfgutil('list', *args, **kwargs)
+    return [info for info in result.output.values()]
+
 def wallpaper(ecids, image, args, auth, **kwargs):
     '''Set the wallpaper of specified ECIDs using image
     '''
@@ -258,7 +298,6 @@ def install_wifi_profile(ecids, profile, **kwargs):
         cfgutil('install-profile', ecids, [profile], _faux(), **kwargs)
     except:
         pass
-    
         
 def prepareDEP(ecids, **kwargs):
     '''prepare specified ECIDs using DEP
