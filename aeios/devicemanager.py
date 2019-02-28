@@ -1130,10 +1130,28 @@ class DeviceManager(object):
             self.log.debug("missing: {0}".format(names))
 
         tasked = self.devices(tasked_ecids)
+
+        #NOTE: Pre-Install locally saved .ipa files before using 
+        #      actools.adapter to install the apps (which has been
+        #      randomly failing before the apps are installed)
+        # - Not a good fix, because there isn't a mechanism for saving
+        #   local .ipa files (newly installed or updated apps will need
+        #   to be manually copied to the machine)
+
+        #HACK: Pre-Install locally saved .ipa files before using 
+        #      actools.adapter 
         self._installapps(tasked, check=False)
+
         #TO-DO:
+        # - fix error reporting in actools.adapter.install_vpp_apps()
         # - add mechanism to record repeated errors
+        # - dynamically attempt to install apps based upon previous
+        #   errors (only try every hour or so when the issue re-appears)
+        # - dynamically report failure based upon occasional impasses
+        
+        #MAYBE:
         # - spawn process that captures downloaded apps
+
         self.log.info("installing apps: {0}".format(tasked.names))
         for _devices, apps in self.apps.breakdown(tasked):
             self.verified = False
@@ -1145,9 +1163,16 @@ class DeviceManager(object):
                                          wait=True)
                 #TO-DO: 
                 #   - mechanism that clears all recorded errors
+                #OR:
+                #   - reset verification mechanism
                 
             except adapter.ACAdapterError as e:
-                # this is not being raised with the skip=True
+                #NOTE: this is not being raised with the skip=True
+                #      which means no errors are being reported
+                
+                #TO-DO:
+                # - this needs to be fixed in acadapter
+                
                 self.log.error(e)
                 self.log.debug("installapps: error str: {0!e}".format(e))
                 self.log.debug("installapps: e.message: {0}".format(e.message))
