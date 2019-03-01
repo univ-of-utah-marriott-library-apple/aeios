@@ -118,7 +118,7 @@ def run(manager, logger):
             except aeios.Stopped:
                 logger.info("manager was stopped")
             except Exception as e:
-                logger.error("unexpected error: {0!s}".format(e))                
+                logger.exception("unexpected error occurred")
     ## terminate the cfutil command
     p.kill()
 
@@ -133,22 +133,28 @@ def adjust_logger_format(logger, pid):
 def main():
     script = os.path.basename(sys.argv[0])
     scriptname = os.path.splitext(script)[0]
-    logger = loggers.StreamLogger(name=scriptname, level=loggers.DEBUG)
+    # logger = loggers.StreamLogger(name=scriptname, level=loggers.DEBUG)
     # logger = loggers.FileLogger(name=scriptname, level=loggers.DEBUG)
 
+    fmt = ('%(asctime)s %(process)d: %(levelname)8s: '
+           '%(name)s.%(funcName)s: %(message)s')
+    logging.basicConfig(level=logging.DEBUG, format=fmt)
+    logger = logging.getLogger(__name__)
+    
+    
     # add the PID to the logger
-    adjust_logger_format(logger, os.getpid())
+    # adjust_logger_format(logger, os.getpid())
     logger.debug("{0} started".format(script))
 
     app_support = os.path.expanduser('~/Library/Application Support')
     resources = os.path.join(app_support, 'Checkout iPads')
     manager = aeios.DeviceManager('edu.utah.mlib.ipad.checkout', 
-                                  logger=logger, path=resources)
+                                  path=resources)
     try:
         action = sys.argv[1]
     except IndexError:
         run(manager, logger)        
-        logger.debug("{0}: run finished".format(script))
+        logger.debug("%s: run finished", script)
         sys.exit(0)
 
     # get the iOS Device environment variables set by `cfgutil exec`
@@ -167,7 +173,7 @@ def main():
         logger.error(err)
         raise SystemExit(err)
     
-    logger.debug("{0}: {1} finished".format(script, action))
+    logger.debug("%s: %s", script, action)
     sys.exit(0)
 
 if __name__ == '__main__':

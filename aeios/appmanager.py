@@ -42,6 +42,8 @@ __all__ = ['AppManager']
 #   - added ipad8,1 model identifier (this needs to be fed in elsewhere)
 #   TO-DO:
 #       - needs to check for missing device identifiers per launch
+
+
 class Error(Exception):
     pass
 
@@ -61,8 +63,10 @@ class AppManager(object):
         # or the list of installed apps needs to be provided <--
         if not logger:
             logger = logging.getLogger(__name__)
-            logger.addHandler(logging.NullHandler())
+            if not logger.handlers:
+                logger.addHandler(logging.NullHandler())
         self.log = logger
+        self.file = self.config.file
 
         a_id = "{0}.apps".format(id)
         self.config = config.Manager(a_id, path=path, **kwargs)
@@ -82,11 +86,11 @@ class AppManager(object):
 
         try:
             self._record = self.config.read()
+            self.log.debug("found configuration: %s", self.file)
         except config.ConfigError:
+            self.log.error("configuration missing: %s", self.file)
             self.config.write(_apps)
             self._record = self.config.read()
-
-        self.file = self.config.file
 
     @property
     def record(self):

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import logging
-
 import config
 
 '''Persistant Tasking Queue
@@ -11,7 +10,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.1.0'
+__version__ = '2.1.2'
 __url__ = None
 __description__ = 'Persistant Task Queue'
 __all__ = ['TaskList']
@@ -25,14 +24,17 @@ __all__ = ['TaskList']
 #   - added (minimal) tests in test_tasklist.py
 #   - removed finished, and other unused code
 #   - modified default logging
+# 2.1.2:
+#   - modified default logging
+
 
 class TaskList(object):
 
     def __init__(self, id, logger=None, **kwargs):
         if not logger:
-            fmt = '%(asctime)s %(levelname)s: %(message)s'
-            logging.basicConfig(format=fmt)
             logger = logging.getLogger(__name__)
+            if not logger.handlers:
+                logger.addHandler(logging.NullHandler())
         self.log = logging
 
         self.config = config.Manager("{0}.tasks".format(id), **kwargs)

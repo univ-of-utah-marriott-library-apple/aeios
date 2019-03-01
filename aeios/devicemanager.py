@@ -254,6 +254,12 @@ __all__ = [
 # 2.5.7:
 # - minor bug fixes()
 
+# 2.6.0:
+# - modified logging
+# - updated for cfgutil 2.
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
+
 class Error(Exception):
     pass
 
@@ -338,17 +344,13 @@ class Resources(object):
     
     def __str__(self):
         return self.path
-    
+
+   
 class DeviceManager(object):
     '''Class for managing multiple iOS devices
     '''
     def __init__(self, id='edu.utah.mlib.ipad', logger=None, **kwargs):
-        if not logger:
-            # create null logger if one wasn't specified
-            logger = logging.getLogger(__name__)
-            if not logger.handlers:
-                logger.addHandler(logging.NullHandler())
-        self.log = logger
+        self.log = logger if logger else logging.getLogger(__name__)
 
         self.lock = config.FileLock('/tmp/ipadmanager', timeout=5)
         self.config = config.Manager("{0}.manager".format(id), **kwargs)
@@ -356,7 +358,8 @@ class DeviceManager(object):
 
         # paths to various resources
         resources = os.path.dirname(self.config.file)
-        r = ['Devices', 'Supervision', 'Images', 'Profiles', 'Logs', 'Apps']
+        r = ['Devices', 'Supervision', 'Images', 
+             'Profiles', 'Logs', 'Apps']
         self.resources = Resources(resources, r)
         self.images = self.resources.images
         self.profiles = self.resources.profiles
@@ -364,14 +367,6 @@ class DeviceManager(object):
         self.logs = self.resources.logs
         self._devices = self.resources.devices
         
-        # self.resources = os.path.dirname(self.config.file)
-        # r = self._setup()
-        # self._devicepath = r['Devices']
-        # self.profiles = r['Profiles']
-        # self.images = r['Images']
-        # self.supervision = r['Supervision']
-        # self.logs = r['Logs']
-
         try:
             self.config.read()
         except config.Error as e:
@@ -391,8 +386,8 @@ class DeviceManager(object):
         _reporting = self.config.get('Reporting', {'Slack': {}})
         self.log.debug("reporting: {0}".format(_reporting))
         self.report = reporting.reporterFromSettings(_reporting) 
-
-        self._cfgutillog = os.path.join(self.logs, 'cfgexec.log')        
+        
+        cfgutil.log = os.path.join(self.logs, 'cfgexec.log')  
 
         self._auth = None
 
@@ -464,7 +459,7 @@ class DeviceManager(object):
                 elif item.endswith('.key') or item.endswith('.der'):
                     key = file
     
-            self._auth = cfgutil.Authentication(cert, key, self.log)    
+            self._auth = cfgutil.Authentication(cert, key)    
         return self._auth
 
     # I want to get rid of this
@@ -656,7 +651,7 @@ class DeviceManager(object):
                 self.log.error(e)
                 _use_tethering = False
             except Exception as e:
-                self.log.error("check_network: unexpected error occurred: {0!s}".format(e))
+                self.log.error("unexpected error occurred: %s", e)
                 raise e
 
         if _use_tethering:
@@ -684,8 +679,7 @@ class DeviceManager(object):
             # too hidden for my liking, but whatever
             self.log.debug("using wifi profile")
             wifi = os.path.join(self.profiles, 'wifi.mobileconfig')
-            cfgutil.install_wifi_profile(devices.ecids, wifi, 
-                                    log=self.log, file=self._cfgutillog)
+            cfgutil.install_wifi_profile(devices.ecids, wifi)
             time.sleep(2)
 
     def checkin(self, info, run=True):
@@ -832,8 +826,7 @@ class DeviceManager(object):
         try:
             self.verified = False
             self.log.debug("{0}: {1}".format(queries, ecidset))
-            result = cfgutil.get(queries, ecidset, log=self.log, 
-                                 file=self._cfgutillog)
+            result = cfgutil.get(queries, ecidset)
             self.log.debug("result: {0}".format(result._output))
         except Exception as e:
             self.log.error(str(e))
@@ -927,8 +920,7 @@ class DeviceManager(object):
         try: 
             self.verified = False
             self.log.info("erasing devices: {0}".format(tasked))
-            result = cfgutil.erase(tasked.ecids, log=self.log, 
-                                   file=self._cfgutillog)
+            result = cfgutil.erase(tasked.ecids)
             erased = self.devices(result.ecids)
             failed = self.devices(result.missing)
 
@@ -943,6 +935,7 @@ class DeviceManager(object):
                 self.log.error(err)
                 self.report.send(err)
                 # TO-DO: still need a way of separating these systems
+            self.log.exception("failed to erase devices")
             raise e
 
         except cfgutil.CfgutilError as e:
@@ -978,11 +971,14 @@ class DeviceManager(object):
                 ## process erased devices
                 # task devices for supervision and app installation
                 self.task.prepare(erased.ecids)
-                self.task.installapps(erased.ecids)
         
                 now = datetime.now()
                 for device in erased:
                     device.erased = now
+
+                if self.apps.list(device):
+                    self.task.installapps([device.ecid])
+
 
                 self.task.add('restart', erased.ecids)
         
@@ -1023,8 +1019,7 @@ class DeviceManager(object):
         try:
             self.log.info("preparing devices: {0}".format(tasked.names))
             self.verified = False
-            result = cfgutil.prepareDEP(tasked.ecids, log=self.log, 
-                                        file=self._cfgutillog)
+            result = cfgutil.prepareDEP(tasked.ecids)
             prepared = self.devices(result.ecids)
             failed = self.devices(result.missing)
 
@@ -1082,8 +1077,7 @@ class DeviceManager(object):
             device.restarting = True
         # self.task.add('restart', devices.ecids)
         _auth = self.authorization()
-        result = cfgutil.cfgutil('restart', devices.ecids, auth=_auth,
-                                 log=self.log, file=self._cfgutillog)    
+        result = cfgutil.cfgutil('restart', devices.ecids, auth=_auth)    
         self.stop(reason='restart')
 
     def _installapps(self, devices, check=True):
@@ -1109,9 +1103,8 @@ class DeviceManager(object):
         
         
         try:
-            result = cfgutil.cfgutil('install-apps', tasked.ecids, 
-                                     appfiles, file=self._cfgutillog,
-                                     log=self.log)
+            ecids = tasked.ecids
+            result = cfgutil._cfgutil('install-apps', ecids, appfiles)
         except cfgutil.Error as e:
             self.log.error(str(e))
         
@@ -1218,12 +1211,10 @@ class DeviceManager(object):
                 path = os.path.join(self.images, file)
                 images[name] = path
         
-        args = ['--screen', 'both']
         try:
             image = images[_type]
             auth = self.authorization()
-            result = cfgutil.wallpaper(ecids, image, args, auth, 
-                                 log=self.log, file=self._cfgutillog)
+            result = cfgutil.wallpaper(ecids, image, auth)
             for device in self.devices(result.ecids):
                 device.background = _type
         except cfgutil.CfgutilError as e:
@@ -1538,13 +1529,12 @@ class DeviceManager(object):
                 self.log.info(e)
                 return
             except adapter.ACAdapterError as e:
-                self.log.error(str(e))
+                self.log.exception("ACAdapter failed")
+                raise e
 
             self.finalize()
             self.log.info("run finished")
 
-def main():
-    print("hello world")
 
 if __name__ == '__main__':
-    main()
+    pass
