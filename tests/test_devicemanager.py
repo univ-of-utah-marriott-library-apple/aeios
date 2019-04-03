@@ -366,6 +366,48 @@ class TestListRefresh(BaseTestCase):
         self.assertEquals(result, self.empty())
 
 
+@unittest.skip("Not implemented")
+class TestRecords(BaseTestCase):
+    '''
+    Tests for device.Manager.records()
+    '''
+    def test_all_records(self):
+        '''
+        test all device records are returned
+        '''
+        pass
+
+    def test_single_ecid(self):
+        '''
+        test single device record is returned
+        '''
+        pass
+    
+    def test_missing_record(self):
+        '''
+        test empty list is returned for missing record
+        '''
+        pass
+
+    def test_specified_ecids(self):
+        '''
+        test specified device records are returned
+        '''
+        pass
+
+    def test_non_iterable(self):
+        '''
+        test error is raised when given a non-iterable
+        '''
+        pass
+
+    def test_non_ecid(self):
+        '''
+        test empty list is returned for non-ECID
+        '''
+        pass
+
+
 class TestCache(BaseTestCase):
     
     def setUp(self):

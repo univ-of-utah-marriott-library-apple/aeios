@@ -53,6 +53,8 @@ class BaseTestCase(unittest.TestCase):
     def tearDown(self):
         pass
 
+
+@unittest.skip("not implemented")
 class TestExecutionRecord(BaseTestCase):
 
     @classmethod
@@ -114,6 +116,11 @@ class ActionTestCase(BaseTestCase):
 
 
 @unittest.skip("not implemented")
+class TestError(BaseTestCase):
+    pass
+
+
+@unittest.skip("not implemented")
 class TestCfgutilError(BaseTestCase):
     '''Test for CfgutilError
     '''
@@ -124,6 +131,10 @@ class TestCfgutilError(BaseTestCase):
 class TestResult(BaseTestCase):
     pass
 
+
+@unittest.skip("not implemented")
+class Authentication(BaseTestCase):
+    pass
 
 @unittest.skip("takes too long")
 class TestErase(ActionTestCase):

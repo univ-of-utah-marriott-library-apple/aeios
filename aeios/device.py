@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import config
 from actools import cfgutil
@@ -13,7 +13,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
 __license__ = "MIT"
-__version__ = '2.5.0'
+__version__ = '2.6.0'
 __url__ = None
 __description__ = 'Persistant iOS device record'
 __all__ = ['Device', 'DeviceError']
@@ -32,6 +32,12 @@ __all__ = ['Device', 'DeviceError']
 #   - changed record identity from UDID to ECID
 #   - modified Device.__init__():
 #       - removed superfluous error checking
+# 2.5.1:
+#   - modified __init__()
+#
+# 2.6.0:
+#   - modified restarting property
+#       - now includes timeout mechanism
 
 class Error(Exception):
     pass
@@ -43,39 +49,37 @@ class DeviceError(Error):
 
 class Device(object):
 
-    def __init__(self, ecid, info={}, logger=None, **kwargs):
-        _info = info.copy()
+    def __init__(self, ecid, info=None, **kwargs):
 
-        if not _info.setdefault('ECID', ecid):
-            raise DeviceError("missing device ECID")
-
-        if not logger:
-            logger = logging.getLogger(__name__)
+        logger = logging.getLogger(__name__)
+        if not logger.handlers:
             logger.addHandler(logging.NullHandler())
         self.log = logger
 
         self.config = config.Manager(ecid, **kwargs)
         self.file = self.config.file
-        
+
         try:
             self._record = self.config.read()
         except config.ConfigError:
-            self.log.debug("record missing: creating new record")
-            self.config.write(_info)
+            if not info:
+                raise DeviceError("missing device information")
+            self.config.write(info)
             self._record = self.config.read()
         except Exception as e:
-            self.log.error("unknown error: {0!s}".format(e))
+            self.log.exception("unknown error occurred")
             raise DeviceError(e)
 
-        # make sure non-changing values are what we expect them to be
-        self._verify(_info)        
-        
-        updatekeys = ['deviceName', 'bootedState', 'buildVersion',
-                      'firmwareVersion', 'locationID']
-        # get k,v from info that are in updatekeys and are not None
-        updated = {k:_info.get(k) for k in updatekeys}
-        # only update non-null values
-        self.config.update({k:v for k,v in updated.items() if v})
+        if info:
+            # verify unchanging values
+            self._verify(info)
+            # if device info was provided, let's update the record
+            updatekeys = ['deviceName', 'bootedState', 'buildVersion',
+                          'firmwareVersion', 'locationID']
+            # get k,v from info that are in updatekeys and are not None
+            updated = {k:info.get(k) for k in updatekeys}
+            # only update non-null values
+            self.config.update({k:v for k,v in updated.items() if v})
 
         # indelible attributes (if one is missing we are in bad shape)
         try:
@@ -129,6 +133,13 @@ class Device(object):
             setattr(self, attribute, value)
         self.config.update({key: value})
 
+    def updateall(self, info):
+        _attrmap = {'serialNumber': 'serialnumber'}
+        for k,a in _attrmap.items():
+            if k in info.keys():
+                setattr(self, a, info[k])
+        self.config.update(info)
+        
     @property
     def verified(self):
         return self.config.setdefault('verified', False)
@@ -158,6 +169,8 @@ class Device(object):
             if _name and not _name.startswith('i'):
                 self.log.debug('saving name: {0}'.format(_name))
                 self.config.update({'name': _name})
+            else:
+                _name += " ({0})".format(self.ecid)
         return _name
 
     @name.setter
@@ -171,14 +184,27 @@ class Device(object):
 
     @property
     def restarting(self):
-        return self.config.setdefault('restarting', False)
+        _restarting = self.config.setdefault('restarting', False)
+        if _restarting:
+            restarted = self.config.get('restarted')
+            try: 
+                if (datetime.now() - restarted) > timedelta(minutes=5):
+                    self.restarting = False
+                    _restarting = False
+            except TypeError:
+                self.restarting = False
+                _restarting = False
+        return _restarting
 
     @restarting.setter
     def restarting(self, value):
-        self.log.debug("{0!s} marking restart: {1}".format(self, value))
         if not isinstance(value, bool):
             raise TypeError("{0}: not boolean".format(value))
-        self.config.update({'restarting': value})
+        _value = {'restarting': value}
+        if value:
+            # mark the time the device was restarted
+            _value['restarted'] = datetime.now()
+        self.config.update(_value)
 
     @property
     def enrolled(self):

@@ -15,7 +15,7 @@ __email__ = "sam.forester@utah.edu"
 __copyright__ = ('Copyright (c) 2019'
                  ' University of Utah, Marriott Library')
 __license__ = "MIT"
-__version__ = '2.4.1'
+__version__ = '2.5.0'
 __url__ = None
 __description__ = 'Execute commands with `cfgutil`'
 
@@ -92,6 +92,9 @@ __description__ = 'Execute commands with `cfgutil`'
 #   - removed extra code
 #   - modified errors
 
+# 2.5.0:
+#   - added restart() and shutdown()
+
 CFGUTILBIN = '/usr/local/bin/cfgutil'
 
 ## file to record all execution to > cfgutil.log = '/path/to/file'
@@ -164,7 +167,7 @@ class Result(object):
 class Authentication(object):
 
     def __init__(self, key, cert):
-        self.log = logging.getLogger(__name__)
+        self.log = logging.getLogger(__name__ + '.Authentication')
         ## verify each file
         for file in (key, cert):
             self._verify(file)
@@ -172,19 +175,19 @@ class Authentication(object):
         self.cert = cert
     
     def _verify(self, file):
-        '''verify file exists and has the correct permissions
+        '''
+        verify file exists and has the correct permissions
         '''
         self.log.debug("verifying: %r", file)
         if not os.path.exists(file):
-            self.log.error("no such file: %r", file)
-            raise AuthenticationError(e)
+            err = "no such file: {0}".format(file)
+            raise AuthenticationError(err)
         ## check file permissions are 0600 ~ '-rw-------'
         mode = stat.S_IMODE(os.stat(file).st_mode)
         if mode != (stat.S_IREAD|stat.S_IWRITE):
-            e = "invalid permissions: {0:04do}: {1}".format(mode, file)
-            self.log.error(e)
-            raise AuthenticationError(e)
-        self.log.info("verified: %r", file)
+            err = "invalid permissions: {0:04do}: {1}".format(mode,file)
+            raise AuthenticationError(err)
+        self.log.debug("verified: %r", file)
     
     def args(self):
         '''returns list of arguments for cfgutil()
@@ -274,7 +277,7 @@ def wallpaper(ecids, image, auth, args=None):
 
     return cfgutil('wallpaper', ecids, args, auth)
 
-def install_wifi_profile(ecids, profile, **kwargs):
+def install_wifi_profile(ecids, profile):
     '''install wifi profile on unmanaged devices
     NOTE:
         install-profile reports failure, but allows the wifi profile to 
@@ -298,7 +301,17 @@ def install_wifi_profile(ecids, profile, **kwargs):
         cfgutil('install-profile', ecids, [profile], _faux())
     except:
         pass
-        
+
+def restart(ecids, auth):
+    if not ecids:
+        raise Error('no ECIDs specified')
+    return cfgutil('restart', ecids, [], auth)
+
+def shutdown(ecids, auth):
+    if not ecids:
+        raise Error('no ECIDs specified')
+    return cfgutil('shut-down', ecids, [], auth)
+
 def prepareDEP(ecids):
     '''prepare specified ECIDs using DEP
     '''
@@ -356,9 +369,12 @@ def cfgutil(command, ecids, args, auth=None):
     logger.debug("returncode: %r", p.returncode)
     if log:
         # record everything to specified file (if cfgutil.log)
-         _record(log, {'execution': cmd, 'output': out, 'error': err,
+        try:
+            _record(log, {'execution': cmd, 'output': out, 'error': err,
                        'ecids': ecids, 'args': args, 'command': command,
                        'returncode': p.returncode})
+        except:
+            logger.exception("failed to record execution data")
     if out:
         try:
             cfgout = json.loads(out)
@@ -372,7 +388,7 @@ def cfgutil(command, ecids, args, auth=None):
         cfgout = {'Command':command, 'Type':'Error', 
                   'Message': 'output: {0!r}'.format(out),
                   'FailureReason': 'cfgutil did not return valid JSON',
-                  'Output': {}, 'Detail': str(e)}
+                  'Output': {}}
 
     # cfgutil command failed (action wasn't performed)
     if p.returncode != 0:

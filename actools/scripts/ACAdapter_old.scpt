@@ -45,7 +45,7 @@ on getRecordValue(kStr, ASRecord)
 end getRecordValue
 
 -- GUI SETUP
--- (void) launchAppleConfigurator()
+
 on launchAppleConfigurator()
 	tell application "System Events"
 		if "Apple Configurator 2" is not in (name of processes) then
@@ -67,14 +67,6 @@ on launchAppleConfigurator()
 		end if
 	end tell
 end launchAppleConfigurator
-
---TO-DO
--- on relaunchAppleConfigurator()
--- end relaunchAppleConfigurator
-
--- on quitAppleConfigurator()
--- end quitAppleConfigurator
-
 
 on maximize(targetWindow)
 	local x, y, w, h
@@ -128,21 +120,6 @@ on allWindows()
 	end tell
 end allWindows
 
--- (deviceWindowRef) newDeviceWindow()
-on newDeviceWindow()
-    -- opens a new device window
-	tell application "System Events" to tell process "Apple Configurator 2"
-        --TO-DO: need to get all current windows
-		set fileMenu to first menu of menu bar item "File" of menu bar 1
-		click menu item "New Window" of fileMenu
-		--TO-DO: compare existing windows to current windows to find opened
-		--       window
-		-- return targetWindow
-	end tell
-end newDeviceWindow()
-
---TO-DO: fix this so it returns newDeviceWindow instead of raising an error
--- (deviceWindowRef) deviceWindow()
 on deviceWindow()
 	tell application "System Events" to tell process "Apple Configurator 2"
 		repeat with w in windows
@@ -151,7 +128,6 @@ on deviceWindow()
 			end if
 		end repeat
 	end tell
-	-- return newDeviceWindow()
 	error "unable to find device window" number 9502
 end deviceWindow
 
@@ -281,7 +257,7 @@ on selectApps(appSheet, k, targetAppValues)
 	repeat with appname in targetAppValues
 		if appname is not in availableApps then
 			performAction(appSheet, {choice:"Cancel"})
-			error "unable to find VPP app: '" & appname & "'" number 9510
+			error "unable to find VPP app: " & appname number 9510
 		end if
 	end repeat
 	
@@ -290,7 +266,6 @@ on selectApps(appSheet, k, targetAppValues)
 		click menu item "Select All" of editMenu
 	end tell
 	selectFromTable(_vppapps, k, targetAppValues)
-	return info of _vppapps
 end selectApps
 
 on selectFromTable(tableRecord, k, targetValues)
@@ -423,22 +398,9 @@ on installVPPApps(targetWndw, apps)
 		-- wierd bug where table is not focused by default (for select all)
 		set focused of appTable to true
 	end tell
-	-- select apps and get all information 
-	set appInfo to selectApps(appSheet, "Name", apps)
+	selectApps(appSheet, "Name", apps)
 	performAction(appSheet, {choice:"Add"})
-	return {apps:appInfo}
 end installVPPApps
-
---TO-DO
--- on removeApps(targetWindow, apps)
--- end removeApps
-
--- on refresh(targetWindow)
--- end refresh
-
--- on info()
--- end info
-
 
 on applyBlueprint(deviceWindow, blueprint)
 	local confirmationPrompt, actionMenu, blueprintMenu
@@ -507,7 +469,6 @@ on performAction(targetPrompt, args)
 	end tell
 end performAction
 
---TO-DO: remove (or replace with action(targetPrompt, args))
 on cancelAction(targetWindow)
 	tell application "System Events" to tell process "Apple Configurator 2"
 		set progressSheet to first sheet of targetWindow
@@ -515,18 +476,12 @@ on cancelAction(targetWindow)
 	performAction(progressSheet, {choice:"Cancel"})
 end cancelAction
 
--- FUTURE (POSSIBLE):
--- possible improvements:
--- work with "VPP Assignments" window to get license information
--- test viability of AppleScript Properties for storing information
-
 
 -- MAIN
 
 on run argv
 	-- Launch AC if it isn't already running
 	launchAppleConfigurator()
-
 	try
 		set command to first item of argv
 	on error
@@ -550,10 +505,6 @@ on run argv
 	else if command is "--cancel" then
 		set wndw to deviceWindow()
 		cancelAction(wndw)
-		--To-DO:
-		-- set targetPrompt to findTargetPrompt()
-		-- performAction(targetPrompt, {choice:"Cancel")
-
 		
 	else if command is "--blueprint" then
 		try
@@ -580,15 +531,14 @@ on run argv
 		set wndw to deviceWindow()
 		putWindowIntoListViewMode(wndw)
 		selectDevices("UDID", udids of args)
-		set apps to installVPPApps(wndw, apps of args)
-		return convertASToJSON(apps)
-
+		installVPPApps(wndw, apps of args)
+		
 	else if command is "--list" then
 		set wndw to deviceWindow()
 		putWindowIntoListViewMode(wndw)
 		set info to getDeviceInfo(wndw)
 		return convertASToJSON(devices of info)
-
+		
 	else
 		error "unknown command: " & command number 9001
 	end if

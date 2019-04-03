@@ -19,7 +19,7 @@ __email__ = 'sam.forester@utah.edu'
 __copyright__ = ('Copyright (c) 2019 '
                  'University of Utah, Marriott Library')
 __license__ = 'MIT'
-__version__ = '2.1.0'
+__version__ = '2.1.1'
 __url__ = None
 __description__ = 'Automate the management of Checkout iOS devices'
 
@@ -57,6 +57,9 @@ __description__ = 'Automate the management of Checkout iOS devices'
 #       - refresh(): manager.verify()
 #  - changed working directory to:
 #       'Application Support/Checkout iPads'
+
+# 2.1.1:
+#   - updated logging
 
 class SignalTrap(object):
     '''Class for trapping interruptions in an attempt to shutdown
@@ -136,14 +139,14 @@ def main():
     # logger = loggers.StreamLogger(name=scriptname, level=loggers.DEBUG)
     # logger = loggers.FileLogger(name=scriptname, level=loggers.DEBUG)
 
-    fmt = ('%(asctime)s %(process)d: %(levelname)8s: '
-           '%(name)s.%(funcName)s: %(message)s')
+    fmt = ('%(asctime)s %(process)d: %(levelname)6s: '
+           '%(name)s - %(funcName)s(): %(message)s')
     logging.basicConfig(level=logging.DEBUG, format=fmt)
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger(script)
+    logging.getLogger('actools.cfgutil').setLevel(logging.INFO)
+    logging.getLogger('aeios.reporting').setLevel(logging.INFO)
+    logging.getLogger('aeios.device').setLevel(logging.ERROR)
     
-    
-    # add the PID to the logger
-    # adjust_logger_format(logger, os.getpid())
     logger.debug("{0} started".format(script))
 
     app_support = os.path.expanduser('~/Library/Application Support')

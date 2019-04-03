@@ -8,9 +8,10 @@ import config
 
 __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
-__copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
+__copyright__ = ('Copyright (c) 2019 '
+                 ' University of Utah, Marriott Library')
 __license__ = "MIT"
-__version__ = '2.1.2'
+__version__ = '2.1.3'
 __url__ = None
 __description__ = 'Persistant Task Queue'
 __all__ = ['TaskList']
@@ -26,23 +27,25 @@ __all__ = ['TaskList']
 #   - modified default logging
 # 2.1.2:
 #   - modified default logging
+# 2.1.3:
+#   - added additional logging
 
+## default null handler for logging
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 class TaskList(object):
 
-    def __init__(self, id, logger=None, **kwargs):
-        if not logger:
-            logger = logging.getLogger(__name__)
-            if not logger.handlers:
-                logger.addHandler(logging.NullHandler())
-        self.log = logging
+    def __init__(self, id, **kwargs):
+        self.log = logging.getLogger(__name__)
 
         self.config = config.Manager("{0}.tasks".format(id), **kwargs)
         self.file = self.config.file
         self._taskkeys = ['erase', 'prepare', 'installapps']
         try:
             self.config.read()
-        except:
+        except config.ConfigError as e:
+            self.log.debug("unable to read config: %s", e)
+            self.log.info("creating default task file: %r", self.file)
             _tasks = {k:[] for k in self._taskkeys}
             _tasks['queries'] = []
             self.config.write(_tasks)
@@ -105,10 +108,11 @@ class TaskList(object):
         '''
         with self.config.lock.acquire():
             if not isinstance(items, (list, set)):
-                raise TypeError("{0}: not list or set".format(items))
+                self.log.error("%r: not list or set", items)
+                raise TypeError("{0!r}: not list or set".format(items))
             _items = set(items).difference(exclude)
             if _items:
-                self.log.debug("adding: {0}: {1}".format(key, _items))
+                self.log.debug("adding: %r: %r", key, _items)
                 try:
                     self.config.add(key, _items)
                 except KeyError:

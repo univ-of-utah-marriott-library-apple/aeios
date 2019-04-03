@@ -66,10 +66,10 @@ class AppManager(object):
             if not logger.handlers:
                 logger.addHandler(logging.NullHandler())
         self.log = logger
-        self.file = self.config.file
 
         a_id = "{0}.apps".format(id)
         self.config = config.Manager(a_id, path=path, **kwargs)
+        self.file = self.config.file
 
         # read global App configuration (if any)
         _apps = self.__class__.default
