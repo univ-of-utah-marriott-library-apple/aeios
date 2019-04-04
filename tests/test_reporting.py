@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# import os
+import os
 # import shutil
 import logging
 import unittest 
@@ -50,7 +50,7 @@ class BaseTestCase(unittest.TestCase):
         pass
 
 
-class ReportingTestCase(BaseTestCase)
+class ReportingTestCase(BaseTestCase):
     
     def setUp(self):
         BaseTestCase.setUp(self)

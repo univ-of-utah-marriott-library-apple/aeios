@@ -1,0 +1,120 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+import logging
+
+import aeios
+
+"""
+Tool to configure aeios
+"""
+
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = '1.0.0'
+
+
+def add(resources, args):
+    if args.item == 'wifi':
+        aeios.utility.add_item(args.path, resources.wifi)
+    elif args.item == 'image':
+        aeios.utility.add_item(args.path, resources.images, name=args.image)
+    elif args.item == 'identity':
+        if args.p12:
+            aeios.utility.add_p12(args.path, resources.supervision)
+        else:
+            aeios.utility.copy_certs(args.path, resources.supervision)
+    elif args.item == 'app':
+        # this is where I'm unsure
+    else:
+        raise SystemExit("unable to add %r", args.item)
+
+
+def remove(resources, args):
+    logger = logging.getLogger(__name__)
+    if args.item == 'wifi':
+        logger.debug("> remove: %r", resources.wifi)
+        os.remove(resources.wifi)
+    elif args.item == 'image':
+        if args.image == 'all':
+            logger.debug("> rmtree: %r", resources.images)
+            shutil.rmtree(resources.images)
+            logger.debug("> mkdir: %r", resources.images)
+            os.mkdir(resources.images)
+        else:
+            images = os.listdir(resources.images)
+            logger.debug("images: %r", images)
+            try:
+                name = [x for x in images if x.startswith(args.image)][0]
+                path = os.path.join(resources.images, name)
+                logger.debug("> remove: %r", path)
+                os.remove(path)
+                logger.info("removed: %r", path)                
+            except IndexError:
+                err = "no %s image".format(args.image)
+                logger.error(err)
+                raise SystemExit(err)                
+    elif args.item == 'identity':
+        logger.debug("> remove: %r", resources.key)
+        os.remove(resources.key)
+        logger.debug("> remove: %r", resources.cert)
+        os.remove(resources.cert)
+    elif args.item == 'app':
+        # this is where I'm unsure
+        domain = ".".join(aeios.resources.DOMAIN, 'aeios.apps')
+        #TO-DO: fix this... (I don't like it)
+        apps = aeios.apps.AppManager(domain, resources)
+        apps.add('all-iPads', (args.app))
+    elif args.item == 'reporting':
+        default = aeios.resources.DEFAULTS.reporting
+        resources.reporting.update(default)
+    else:
+        raise SystemExit("unable to remove %r", args.item)
+
+
+def configure(resources, args):
+    if args.item == 'slack':
+        data = {'URL': args.URL, 'channel': args.channel, 'name': args.name}
+        resources.reporting(data)
+    else:
+       raise SystemExit("unable to configure %r", args.item) 
+
+def main(argv):
+    logger = logging.getLogger(__name__)
+    
+    path = aeios.resources.PATH
+    prefs = aeios.resources.PREFERENCES
+    resources = aeios.resources.Resources()
+
+    logger.debug("path: %r", path)
+    logger.debug("prefs: %r", prefs)
+    logger.debug("apps: %r", resources.apps)
+    logger.debug("supervision: %r", resources.supervision)
+    logger.debug("profiles: %r", resources.profiles)
+    # logger.debug("devices: %r", resources.devices)
+    logger.debug("images: %r", resources.images)
+
+    parser = aeios.utility.Parser()
+    args = parser.parse(argv)
+
+    if args.cmd == 'add':
+        # resources.add()
+        add(resources, args)
+    elif args.cmd == 'remove':
+        remove(resources, args)
+    elif args.cmd == 'configure':
+        configure(resources, args)
+    # ideally:
+    #   func = getattr(resources, args.cmd)
+    #   func(args)
+    # OR:
+    #   resources.modify(args)
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
+    
+
