@@ -1,35 +1,32 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 import os
+import time
 import shutil
+import unittest
 import plistlib
 import threading
-import time
-import unittest
-from datetime import datetime
+import datetime as dt
 
-'''Tests for ipadmanager.tasklist
-'''
+from aeios import config, tasklist
 
-import config
-from config import FileLock
-from tasklist import TaskList
+"""
+Tests for aeios.tasklist
+"""
 
-__author__ = "Sam Forester"
-__email__ = "sam.forester@utah.edu"
-__copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
-__license__ = "MIT"
-__version__ = '1.0.1'
-__url__ = None
-__description__ = 'Tests for ipadmanager.tasklist'
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright (c) 2012 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = "1.0.2"
 
-## location for temporary files created with tests
-TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp')
+# location for temporary files created with tests
+TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp', 'tasklist')
 
 def setUpModule():
-    '''create tmp directory
-    '''
+    """
+    create tmp directory
+    """
     try:
         os.mkdir(TMPDIR)
     except OSError as e:
@@ -37,8 +34,9 @@ def setUpModule():
             raise
     
 def tearDownModule():
-    '''Remove tmp directory
-    '''
+    """
+    remove tmp directory
+    """
     shutil.rmtree(TMPDIR)
 
 
@@ -57,7 +55,7 @@ class BaseTestCase(unittest.TestCase):
     def setUp(self):
         self.id = 'edu.utah.mlib.ipad.tasks'
         self.path = self.__class__.path 
-        self.task = TaskList(self.id, path=self.path)
+        self.task = tasklist.TaskList(self.id, path=self.path)
         self.file = self.task.file
         self.ecids = ['0xAABBCCDDEEFF11', '0xAABBCCDDEEFF12']
         self.only = ['0xAABBCCDDEEFF13']
@@ -92,8 +90,8 @@ class TestTaskListBasic(BaseTestCase):
         self.assertEquals(self.task.record['prepare'], [])
 
     def test_add_none(self):
-        with self.assertRaises(TypeError):
-            self.task.add('install', None)
+        self.task.add('install', None)
+        self.assertEquals(self.task.get('install'), [])
 
     def test_add_string(self):
         with self.assertRaises(TypeError):
@@ -152,8 +150,6 @@ class TestTaskListBasic(BaseTestCase):
                               only=[])
         self.assertEquals(list, [])
 
-
-
     def test_get_empty(self):
         empty = self.task.get('test')
         self.assertEquals([], empty)
@@ -173,7 +169,6 @@ class TestTaskListBasic(BaseTestCase):
         self.assertEquals(result, [])
         with self.assertRaises(KeyError):
             self.task.record['missing']
-
 
     def test_get_exclude(self):
         excluded = [self.ecids[0]]
@@ -265,7 +260,7 @@ class TestTaskListRemove(BaseTestCase):
         self.task.add('prepare', self.only)
         self.task.query('installedApps', self.only)
         self.task.query('isSupervised', self.ecids)
-        self.task.remove(ecids, all=True)
+        self.task.remove(ecids)
         self.assertEquals(self.task.get('erase'), [])
         self.assertEquals(self.task.get('prepare'), [])
         self.assertEquals(self.task.query('installedApps'), [])
@@ -279,7 +274,7 @@ class TestTaskListRemove(BaseTestCase):
     def test_remove_all_empty_ecids(self):
         self.task.add('erase', self.ecids)
         self.task.query('installedApps', self.only)
-        self.task.remove([], all=True)
+        self.task.remove([])
 
     
 class TestTaskListErase(BaseTestCase):
@@ -564,16 +559,18 @@ class TestTaskListRepeatQueries(BaseTestCase):
       
 
 class TestThreaded(BaseTestCase):
-    '''Tests involving threading
-    '''
+    """
+    Tests involving threading
+    """
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.task2 = TaskList(self.id, path=self.path)
-        self.task3 = TaskList(self.id, path=self.path)
+        self.task2 = tasklist.TaskList(self.id, path=self.path)
+        self.task3 = tasklist.TaskList(self.id, path=self.path)
         
     def test_threaded_add_get_list_repeat(self):
-        '''test threaded tasks behave as expected over several iterations
-        '''                
+        """
+        test threaded tasks behave as expected over several iterations
+        """                
         e1, e2 = self.ecids
         ## lambda for thread: <task obj>.add('test', [<ecid>])
         add = lambda task,ecid: task.add('test', [ecid])
@@ -584,20 +581,20 @@ class TestThreaded(BaseTestCase):
             t1 = threading.Thread(target=add, args=(self.task2, e1))
             t2 = threading.Thread(target=add, args=(self.task3, e2))
             t1.start()
+            time.sleep(0.01)
             t2.start()
             # block until the threads are finished
             t1.join()
             t2.join()
-#             verify something was added to the task (also stall)
-#             self.assertTrue(self.task.list('test'))
             # make sure both ECIDs are accounted for
             self.assertItemsEqual(self.task.get('test'), self.ecids)
             # make sure task is empty after get()
             self.assertFalse(self.task.list('test'))
 
     def test_threaded_add_duplicate_repeat(self):
-        '''test threaded adding of identical items
-        '''                
+        """
+        test threaded adding of identical items
+        """                
         e1, e2 = self.ecids
         ## lambda for thread: <task obj>.add('test', [<ecid>])
         add = lambda task,ecid: task.add('test', [ecid])
@@ -608,6 +605,7 @@ class TestThreaded(BaseTestCase):
             t1 = threading.Thread(target=add, args=(self.task2, e1))
             t2 = threading.Thread(target=add, args=(self.task3, e1))
             t1.start()
+            time.sleep(0.01)
             t2.start()
             # block until the threads are finished
             t1.join()
@@ -624,9 +622,8 @@ class TestLocking(BaseTestCase):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.task = TaskList(self.id, path=self.path, timeout=0)
-        self.lock = FileLock(self.task.config.lockfile, 
-                                      timeout=1)
+        self.task = tasklist.TaskList(self.id, path=self.path, timeout=0)
+        self.lock = config.FileLock(self.task.config.lockfile, timeout=1)
         
     def test_device_locked(self):
         with self.lock.acquire():
@@ -634,7 +631,5 @@ class TestLocking(BaseTestCase):
                 self.task.add('erase', self.ecids[0])
         
 
-
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
-
+    unittest.main(verbosity=1)

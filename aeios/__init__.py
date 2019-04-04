@@ -1,31 +1,31 @@
 # -*- coding: utf-8 -*-
 
 import config
+import apps
 import tethering
+
 from actools import cfgutil, adapter
-from device import Device
+from device import Device, DeviceList
 from tasklist import TaskList
-from appmanager import AppManager
 from devicemanager import DeviceManager, Stopped
 
-'''Collection of tools for managing and automating iOS devices
-'''
+"""
+Automated Enterprise iOS
+
+A collection of tools for managing and automating iOS devices
+"""
 
 __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
-__copyright__ = ('Copyright (c) 2019 '
-                 'University of Utah, Marriott Library')
+__copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = '2.6.2'
-__url__ = None
-__description__ = ('Collection of tools for managing and automating '
-                   'iOS devices')
+__version__ = "2.7.0"
 __all__ = [
+    'apps',
     'DeviceManager',
     'Stopped',
     'Device',
     'TaskList',
-    'AppManager',
     'cfgutil',
     'adapter',
     'tethering']

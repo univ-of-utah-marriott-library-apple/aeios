@@ -1,3 +1,0 @@
-{"activity":{"options":[],"info":["Step 1 of 5: Assigning a license for “Microsoft Excel”","Adding apps on “student-checkout-ipad-10”"],"choices":["Cancel"]},"alerts":[{"options":["Apply to all apps"],"info":["An unexpected error has occurred with “student-checkout-ipad-10”.","Internal error [ConfigurationUtilityKit.vpp.error – 0x2583 (9603)]"],"choices":["Skip App","Stop"]}],"busy":true}
-{"activity":{"options":[],"info":["Step 3 of 5: Starting sync","Adding apps on “student-checkout-ipad-10”"],"choices":["Cancel"]},"alerts":[{"options":["Apply to all apps"],"info":["The app named “Teams” already exists on “student-checkout-ipad-10”.","Would you like to replace it with the one you are adding?"],"choices":["Skip App","Stop","Replace"]}],"busy":true}
-

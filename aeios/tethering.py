@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
+"""
+Library for iOS Device tethering
 
-'''functions for tethered-caching
-'''
+Mostly Deprecated in macOS 10.13+
+"""
 
 import os
 import sys
@@ -14,18 +15,17 @@ import plistlib
 import json
 import logging
 
-__author__ = "Sam Forester"
-__email__ = "sam.forester@utah.edu"
-__copyright__ = "Copyright(c) 2018 University of Utah, Marriott Library"
-__license__ = "MIT"
-__version__ = '1.4.3'
-__url__ = None
-__description__ = 'functions for iOS device tethering'
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright(c) 2019 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = "1.4.3"
 
 ENABLED = None
 
-## Add NullHandler to the logger (in case logging hasn't been setup)
+# suppress "No handlers could be found" message
 logging.getLogger(__name__).addHandler(logging.NullHandler())
+
 
 class Error(Exception):
     pass
@@ -36,9 +36,15 @@ class TetheringError(Error):
 
 
 def _old_tetherator(arg, output=True, **kwargs):
-    '''get old style output from `AssetCacheTetheratorUtil`
-    if output=False, only the returncode is returned
-    '''
+    """
+    old style output from `AssetCacheTetheratorUtil`
+    
+    :param string arg:      argument for `AssetCacheTetheratorUtil`
+    :param bool output:     modify return 
+    
+    :returns: (output=True)     new-style `AssetCacheTetheratorUtil` output 
+    :returns: (output=False)    returncode from `AssetCacheTetheratorUtil`
+    """
     p, out = assetcachetetheratorutil(arg, json=False, **kwargs)
     if output:
         # modify the output of old `AssetCacheTetheratorUtil` to be 
@@ -59,13 +65,13 @@ def _old_tetherator(arg, output=True, **kwargs):
     else:
         return p.returncode
 
-def _parse_tetherator_status(status):
-    '''re-write of parse_tetherator (more complete parser)
-    Does its best to convert output of `AssetCacheTetheratorUtil status`
-    into a python dictionary regardless of keys and values.
 
-    (Deprecated in 10.13+)
-    '''
+def _parse_tetherator_status(status):
+    """
+    Parse output of `AssetCacheTetheratorUtil status`
+
+    (Deprecated in 10.13+)    
+    """
     logger = logging.getLogger(__name__)
     # remove newlines and extra whitespace from status
     stripped = re.sub(r'\n|\s{4}', '', status)
@@ -128,6 +134,7 @@ def _parse_tetherator_status(status):
     # return list of all device dicts
     return tethered_devices
 
+
 def assetcachetetheratorutil(arg, json=True, log=None):
     if not log:
         log = logging.getLogger(__name__)
@@ -142,30 +149,32 @@ def assetcachetetheratorutil(arg, json=True, log=None):
     # older version of command prints output to stderr
     return (p, out) if json else (p, err)
 
+
 def _tetherator(arg, output=True, **kwargs):
-    '''
-    get output from `AssetCacheTetheratorUtil` in 10.13+
-    if output=False: returns the exit status
-    '''
+    """
+    10.13+ `AssetCacheTetheratorUtil`
+    
+    """
     p, out = assetcachetetheratorutil(arg, json=True, **kwargs)
     if output:
         return json.loads(out.rstrip())['result']
     else:
         return p.returncode
 
+
 # decorator
 def dynamic(func):
-    '''
+    """
     decorator to dynamically pick an assign the appropriate 
     function used for returning information about device tethering
     function is only calculated once
-    '''
+    """
     # calculate which version function to use (only calculated once)
     try:
         # --json flag only available in 10.13+
         cmd = ['/usr/bin/AssetCacheTetheratorUtil', '--json', 'status']
         subprocess.check_call(cmd, stdout=subprocess.PIPE, 
-                                   stderr=subprocess.PIPE)
+                              stderr=subprocess.PIPE)
         # use the newer version
         _func = _tetherator
     except subprocess.CalledProcessError:
@@ -176,10 +185,12 @@ def dynamic(func):
         return _func(*args, **kwargs)
     return wrapper
 
+
 @dynamic
 def tetherator():
-    '''function called is determined by the @dynamic decorator
-    '''
+    """
+    function called is determined by the @dynamic decorator
+    """
     # NOTE: I find this strange, because I don't define _decorated()
     #       but it doesn't matter what I call: f(), blah(), broken()
     #       ... everything seems to point to the wrapped function
@@ -192,12 +203,13 @@ def tetherator():
     #       is why the call above didn't raise UnboundLocalError)
     pass
 
-## additional tools
+
+# ADDITIONAL TOOLS
 
 def wait_for_devices(previous, timeout=10, poll=2, **kwargs):
-    '''compare items in the previous device list with devices that
-    appear
-    '''
+    """
+    compare items in the previous device list with devices that appear
+    """
     logger = logging.getLogger(__name__)
     logger.info("waiting for devices to reappear")
     prev_sn = [d['Serial Number'] for d in previous]
@@ -249,9 +261,12 @@ def wait_for_devices(previous, timeout=10, poll=2, **kwargs):
 
     raise TetheringError("devices never came up: {0}".format(waiting))
 
+
 def tethered_caching(args):
-    '''Start or stop tethered-caching
-    '''
+    """
+    Start or stop tethered-caching 
+    (Not Supported in macOS 10.13+)
+    """
     _bin = '/usr/bin/tethered-caching'
     logger = logging.getLogger(__name__)
     try:
@@ -264,10 +279,12 @@ def tethered_caching(args):
         logger.error(e)
         raise Error("tethered-caching failed")    
 
+
 def restart(timeout=30, wait=True, log=None):
-    '''Restart tethered-caching (requires root)
-    (Not supported in 10.13+)
-    '''
+    """
+    Restart tethered-caching (requires root)
+    (Not Supported in macOS 10.13+)
+    """
     if not log:
         logger = logging.getLogger(__name__)
     logger.info("restarting tethered caching")
@@ -280,19 +297,23 @@ def restart(timeout=30, wait=True, log=None):
     if previous and wait:
         wait_for_devices(previous, timeout=timeout)
 
+
 def start():
-    '''Starts tethered-caching (requires root)
-    (Not supported in 10.13+)
-    '''
+    """
+    Starts tethered-caching (requires root)
+    (Not Supported in macOS 10.13+)
+    """
     logger = logging.getLogger(__name__)
     logger.info("starting tethering services")
     tethered_caching('-b')
     logger.debug("successfully started tethering!")
 
+
 def stop():  
-    '''Stops tethered-caching (requires root)
-    (Not supported in 10.13+)
-    '''
+    """
+    Stops tethered-caching (requires root)
+    (Not Supported in macOS 10.13+)
+    """
     logger = logging.getLogger(__name__)
     if not enabled(refresh=False):
         logger.warn("tethering services not running")
@@ -301,32 +322,41 @@ def stop():
     tethered_caching('-k')
     logger.debug("successfully stopped tethering!")
 
+
 def enabled(refresh=True, log=None, **kwargs):
-    '''Returns True if device Tethering is enabled, else False
-    '''
+    """
+    :returns: True if device Tethering is enabled, else False
+    """
     global ENABLED
     if refresh or ENABLED is None:
         retcode = tetherator('isEnabled', output=False, **kwargs)
         ENABLED = True if retcode == 0 else False
     return ENABLED
 
+
 def devices(**kwargs):
-    '''shortcut function returning list of all devices found by
+    """
+    shortcut function returning list of all devices found by
     tetherator()
-    '''
+    """
     return tetherator('status', **kwargs)['Device Roster']
 
+
 def device_is_tethered(sn, **kwargs):
-    '''Returns True if device with specified serial number is tethered
-    '''
+    """
+    :returns: True if device with specified serial number is tethered
+    """
     if not sn:
         raise Error("no device specified")
     return devices_are_tethered([sn], **kwargs)
 
+
 def devices_are_tethered(sns, strict=False, **kwargs):
-    '''Use list of devices serial numbers to determine
-    returns True if all specified devices are tethered
-    '''
+    """
+    Use list of devices serial numbers to determine tethering status
+
+    :returns: True if all specified devices are tethered
+    """
     logger = logging.getLogger(__name__)
     if not enabled(refresh=False, **kwargs):
         raise Error("tethering is not enabled")
@@ -371,6 +401,7 @@ def devices_are_tethered(sns, strict=False, **kwargs):
             raise TetheringError(err)
     
     return all_tethered
+
 
 if __name__ == '__main__':
     pass

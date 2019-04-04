@@ -1,33 +1,33 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 import os
+import time
 import shutil
 import plistlib
-import threading
-import time
 import unittest
-from datetime import datetime
+import threading
+import datetime as dt
 
-'''Tests for ipadmanager.config
-'''
+from aeios import config
 
-import config
+"""
+Tests for aeios.config
+"""
 
-__author__ = "Sam Forester"
-__email__ = "sam.forester@utah.edu"
-__copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
-__license__ = "MIT"
-__version__ = '1.0.1'
-__url__ = None
-__description__ = 'Tests for ipadmanager.config'
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright (c) 2018 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = "1.0.2"
 
-## location for temporary files created with tests
-TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp')
+# location for temporary files created with tests
+LOCATION = os.path.dirname(__file__)
+TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp', 'config')
 
 def setUpModule():
-    '''create tmp directory
-    '''
+    """
+    create tmp directory
+    """
     try:
         os.mkdir(TMPDIR)
     except OSError as e:
@@ -35,8 +35,9 @@ def setUpModule():
             raise
     
 def tearDownModule():
-    '''Remove tmp directory
-    '''
+    """
+    remove tmp directory
+    """
     shutil.rmtree(TMPDIR)
 
 
@@ -44,31 +45,21 @@ class TestConfigInit(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        '''One time setup for this TestCase. 
-        If Exception is raised, no tests are run.
-        '''
         cls.file = os.path.join(TMPDIR, 'file')
         with open(cls.file, 'w') as f:
             f.write('file')
 
     @classmethod
     def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
         os.remove(cls.file)
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         cls = self.__class__
         self.file = cls.file
         self.path = os.path.join(TMPDIR, 'init')
         self.config = config.Manager(id='init_test', path=self.path)
 
     def tearDown(self):
-        '''Runs after each test.
-        '''
         pass
     
     def test_has_file_attribute(self):
@@ -106,15 +97,11 @@ class TestConfigInit(unittest.TestCase):
 class TestSimpleReadAndWrite(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         cls = self.__class__
         self.path = os.path.join(TMPDIR, 'read-and-write')
         self.config = config.Manager(id='test', path=self.path)
 
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -158,15 +145,10 @@ class TestSimpleReadAndWrite(unittest.TestCase):
 class TestUpdate(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        cls = self.__class__
         self.path = os.path.join(TMPDIR, 'update')
         self.config = config.Manager(id='test', path=self.path)
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -197,15 +179,11 @@ class TestUpdate(unittest.TestCase):
 class TestGet(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         self.path = os.path.join(TMPDIR, 'get')
         self.config = config.Manager(id='test', path=self.path)
         self.config.write({})
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -213,41 +191,47 @@ class TestGet(unittest.TestCase):
                 raise
 
     def test_get_missing_file(self):
-        '''test Exception is raised when no file exists
-        '''
+        """
+        test Exception is raised when no file exists
+        """
         os.remove(self.config.file)
         with self.assertRaises(Exception):
             self.config.get('missing')
 
     def test_get_missing_with_default(self):
-        '''test default value is returned when key is missing
-        '''
+        """
+        test default value is returned when key is missing
+        """
         result = self.config.get('missing', 'blah')
         self.assertEquals(result, 'blah')
 
     def test_get_missing_without_default(self):
-        '''test None is returned when no value exists
-        '''
+        """
+        test None is returned when no value exists
+        """
         result = self.config.get('missing')
         self.assertIsNone(result)
 
     def test_get_exists(self):
-        '''test existing value is returned
-        '''
+        """
+        test existing value is returned
+        """
         self.config.write({'exists': 'value'})
         result = self.config.get('exists')
         self.assertEquals(result, 'value')
 
     def test_get_exists_with_default(self):
-        '''test existing value is returned when default is provided
-        '''
+        """
+        test existing value is returned when default is provided
+        """
         self.config.write({'exists': 'value'})
         result = self.config.get('exists', 'blah')
         self.assertEquals(result, 'value')
 
     def test_get_on_list(self):
-        '''test AttributeError is raised when get is called on list
-        '''
+        """
+        test AttributeError is raised when get is called on list
+        """
         self.config.write([])
         with self.assertRaises(AttributeError):
             self.config.get('exists', 'blah')
@@ -256,15 +240,11 @@ class TestGet(unittest.TestCase):
 class TestDelete(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         self.path = os.path.join(TMPDIR, 'delete')
         self.config = config.Manager(id='test', path=self.path)
         self.config.write({'key':'value'})
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -272,67 +252,70 @@ class TestDelete(unittest.TestCase):
                 raise
 
     def test_delete_existing(self):
-        '''test key is deleted from config
-        '''
+        """
+        test key is deleted from config
+        """
         result = self.config.delete('key')
         data = self.config.read()
         self.assertEquals(data, {})
 
     def test_delete_missing(self):
-        '''test KeyError is raised when deleting missing key
-        '''
+        """
+        test KeyError is raised when deleting missing key
+        """
         self.config.write({})
         with self.assertRaises(KeyError):
             self.config.delete('key')
 
     def test_delete_missing_file(self):
-        '''test KeyError is raised when deleting missing key
-        '''
+        """
+        test KeyError is raised when deleting missing key
+        """
         os.remove(self.config.file)
         with self.assertRaises(Exception):
             self.config.delete('key')
 
     def test_delete_returns(self):
-        '''test delete returns the value for the key it's deleting
-        '''
+        """
+        test delete returns the value for the key it's deleting
+        """
         result = self.config.delete('key')
         self.assertEquals(result, 'value')
 
     def test_delete_list(self):
-        '''test index is deleted from list
-        '''
+        """
+        test index is deleted from list
+        """
         self.config.write(['value'])
         value = self.config.delete(0)
         result = self.config.read()
         self.assertEquals(result, [])
 
     def test_delete_list_retunrs(self):
-        '''test delete returns value on list
-        '''
+        """
+        test delete returns value on list
+        """
         self.config.write(['value'])
         result = self.config.delete(0)
         self.assertEquals(result, 'value')
 
     def test_delete_list_empty(self):
-        '''test delete raises IndexError on empty list
-        '''
+        """
+        test delete raises IndexError on empty list
+        """
         self.config.write([])
         with self.assertRaises(IndexError):
             self.config.delete(0)
 
 
-
+@unittest.skip("Unfinished")
 class TestAppend(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         self.path = os.path.join(TMPDIR, 'append')
         self.config = config.Manager(id='test', path=self.path)
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -340,17 +323,14 @@ class TestAppend(unittest.TestCase):
                 raise
 
 
+@unittest.skip("Unfinished")
 class TestReset(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         self.path = os.path.join(TMPDIR, 'reset')
         self.config = config.Manager(id='test', path=self.path)
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -358,17 +338,14 @@ class TestReset(unittest.TestCase):
                 raise
 
 
+@unittest.skip("Unfinished")
 class TestAdd(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         self.path = os.path.join(TMPDIR, 'add')
         self.config = config.Manager(id='test', path=self.path)
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -379,19 +356,15 @@ class TestAdd(unittest.TestCase):
 class TestDeleteKeys(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         self.path = os.path.join(TMPDIR, 'delete')
         self.config = config.Manager(id='test', path=self.path)
         template = {'string':'string', 'list':[], 'dict':{}, 
                     'integer': 1, 'boolean': True, 
-                    'date': datetime.now(), 'float': 0.5,
+                    'date': dt.datetime.now(), 'float': 0.5,
                     'data': plistlib.Data('data')}
         self.config.write(template)
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -399,35 +372,40 @@ class TestDeleteKeys(unittest.TestCase):
                 raise
 
     def test_deletekeys_missing_file(self):
-        '''test Exception is raised when no file exists
-        '''
+        """
+        test Exception is raised when no file exists
+        """
         os.remove(self.config.file)
         with self.assertRaises(config.Error):
             self.config.deletekeys(['missing'])
 
     def test_deletekeys_on_list(self):
-        '''test Exception is raised when no file exists
-        '''
+        """
+        test Exception is raised when no file exists
+        """
         self.config.write(['missing'])
         with self.assertRaises(TypeError):
             self.config.deletekeys(['missing'])
 
     def test_deletekeys_missing_key(self):
-        '''test Exception is not raised deleting multiple keys
-        '''
+        """
+        test Exception is not raised deleting multiple keys
+        """
         self.config.deletekeys(['missing'])
         
     def test_deletekeys_partial_missing_key(self):
-        '''test Exception is not raised deleting multiple keys
-        '''
+        """
+        test Exception is not raised deleting multiple keys
+        """
         self.config.deletekeys(['missing', 'string'])
         data = self.config.read()
         self.assertFalse(data.has_key('missing'))
         self.assertFalse(data.has_key('string'))
 
     def test_deletekeys_missing_key_returns_empty_dict(self):
-        '''test Exception is not raised deleting multiple keys
-        '''
+        """
+        test Exception is not raised deleting multiple keys
+        """
         result = self.config.deletekeys(['missing'])
         self.assertEquals(result, {})        
 
@@ -440,15 +418,11 @@ class TestDeleteKeys(unittest.TestCase):
 class TestSetDefault(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         self.path = os.path.join(TMPDIR, 'setdefault')
         self.config = config.Manager(id='test', path=self.path)
         self.config.write({})
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -456,76 +430,84 @@ class TestSetDefault(unittest.TestCase):
                 raise
 
     def test_setdefault_missing_file(self):
-        '''test Exception is raised when no file exists
-        '''
+        """
+        test Exception is raised when no file exists
+        """
         os.remove(self.config.file)
         with self.assertRaises(Exception):
             self.config.setdefault('missing')
 
     def test_setdefault_missing_with_default(self):
-        '''test default value is returned when key is missing
-        '''
+        """
+        test default value is returned when key is missing
+        """
         result = self.config.setdefault('missing', 'blah')
         self.assertEquals(result, 'blah')
 
     def test_setdefault_missing_with_default_persists(self):
-        '''test default value is returned when key is missing
-        '''
+        """
+        test default value is returned when key is missing
+        """
         value = self.config.setdefault('missing', 'blah')
         result = self.config.setdefault('missing')
         self.assertEquals(result, 'blah')
 
     def test_setdefault_missing_without_default(self):
-        '''test None is returned when no value exists
-        '''
+        """
+        test None is returned when no value exists
+        """
         result = self.config.setdefault('missing')
         self.assertIsNone(result)
 
     def test_setdefault_missing_no_default_persists(self):
-        '''test None is returned when no value exists
+        """
+        test None is returned when no value exists
         This gets tricky, because None is not a supported plist value
-        '''
+        """
         self.config.setdefault('missing')
         data = self.config.read()
         with self.assertRaises(Exception):
             result = data['missing']
 
     def test_setdefault_exists(self):
-        '''test existing value is returned
-        '''
+        """
+        test existing value is returned
+        """
         self.config.write({'exists': 'value'})
         result = self.config.setdefault('exists')
         self.assertEquals(result, 'value')
 
     def test_setdefault_exists_with_default(self):
-        '''test existing value is returned when default is provided
-        '''
+        """
+        test existing value is returned when default is provided
+        """
         self.config.write({'exists': 'value'})
         result = self.config.setdefault('exists', 'blah')
         self.assertEquals(result, 'value')
 
     def test_setdefault_exists_with_default_not_changed(self):
-        '''test existing value is returned when default is provided
-        '''
+        """
+        test existing value is returned when default is provided
+        """
         self.config.write({'exists': 'value'})
         value = self.config.setdefault('exists', 'blah')
         result = self.config.setdefault('exists')
         self.assertEquals(result, 'value')
 
     def test_setdefault_on_list(self):
-        '''test AttributeError is raised when get is called on list
-        '''
+        """
+        test AttributeError is raised when get is called on list
+        """
         self.config.write([])
         with self.assertRaises(TypeError):
             self.config.setdefault('exists', 'blah')
 
 
 class TestThreaded(unittest.TestCase):
-    '''Tests involving threading
-    '''
+    """
+    Tests involving threading
+    """
     def setUp(self):
-        '''Runs before each test.
-        '''
         self.path = os.path.join(TMPDIR, 'threaded')
         self.config = config.Manager(id='test', path=self.path)
         self.config.write({})
@@ -533,8 +515,6 @@ class TestThreaded(unittest.TestCase):
         self.config3 = config.Manager(id='test', path=self.path)
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.config.file)
         except OSError as e:
@@ -542,8 +522,9 @@ class TestThreaded(unittest.TestCase):
                 raise
 
     def test_threaded_update(self):
-        '''test threaded config.Managers update as expected
-        '''
+        """
+        test threaded config.Managers update as expected
+        """
         self.config.write({})
         # function for threading
         update = lambda x,y: x.update(y)
@@ -561,8 +542,9 @@ class TestThreaded(unittest.TestCase):
 
 
     def test_threaded_write(self):
-        '''test threaded config.Managers write as expected
-        '''
+        """
+        test threaded config.Managers write as expected
+        """
         self.config.write({})
         write = lambda x,y: x.write(y)
         t1 = threading.Thread(target=write, 
@@ -581,9 +563,6 @@ class TestThreaded(unittest.TestCase):
 class TestLocking(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        cls = self.__class__
         self.path = os.path.join(TMPDIR, 'locking')
         self.config = config.Manager(id='test', path=self.path, timeout=0)
         self.config.write({})
@@ -606,4 +585,4 @@ class TestLocking(unittest.TestCase):
         
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    unittest.main(verbosity=1)

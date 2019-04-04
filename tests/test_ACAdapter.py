@@ -1,28 +1,27 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import os
+# import os
 # import shutil
 import unittest 
-from adapter import ACADAPTER
 
-'''Tests for ACAdapter.scpt
-'''
+from actools import adapter 
 
-__author__ = "Sam Forester"
-__email__ = "sam.forester@utah.edu"
-__copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
-__license__ = "MIT"
-__version__ = '1.0.0'
-__url__ = None
-__description__ = 'Tests for ACAdapter.scpt'
+"""
+Tests for ACAdapter.scpt
+"""
+
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright (c) 2018 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = "0.0.0"
 
 
 def setUpModule():
     pass
 
+
 def tearDownModule():
-    # shutil.rmtree(TMPDIR)
     pass
 
 

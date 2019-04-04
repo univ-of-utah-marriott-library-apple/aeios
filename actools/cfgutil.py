@@ -7,103 +7,25 @@ import stat
 import inspect
 import logging
 
-'''Execute commands with `cfgutil`
-'''
+"""
+Execute commands with `cfgutil`
+"""
 
-__author__ = "Sam Forester"
-__email__ = "sam.forester@utah.edu"
-__copyright__ = ('Copyright (c) 2019'
-                 ' University of Utah, Marriott Library')
-__license__ = "MIT"
-__version__ = '2.5.0'
-__url__ = None
-__description__ = 'Execute commands with `cfgutil`'
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = "2.5.0"
 
-## CHANGELOG:
-# 2.0.1:
-#   - added check in Authentication to make sure permissions of the 
-#     files are 0600
-# 2.0.2:
-#   - raise errors in the event of empty params
-# 2.0.3:
-#   - more error detection
-# 2.0.4:
-#   - modified logging
-# 2.0.5:
-#   - fixed bug that caused CfgutilError to overwrite Message
-# 2.1.0:
-#   - added Result class:
-#       - homogenizes returns on many functions
-#       - incorporates result, failed/missing
-#       - contains reference to entire cfgutil output (for debugging)
-#       - contains arguments used for execution (for debugging)
-#       - contains list of ECIDs that were missing from the result
-#       - failed 
-#   - Changed return of most functions to incorporate Result() class
-#   - modified/specialized CfgutilError Exception
-#   - modified Exceptions raised
-#   - no longer raises CfgutilError when TypeError, ValueError or 
-#     RuntimeError are appropriate
-#   - modified keyword arguments with cfgutil():
-#       - returns Result() by default (was dict from json.loads())
-#       - added fmt (default None):
-#           - fmt='json' will return dict returned by json.loads()
-#           - no other keys are supported, key may change
-#       - added file (optional):
-#           - specify a file where returncode, output, error, and args
-#             will be written
-#   - removed InstalledApps (wasn't useful enough)
-#   - added TESTING flag:
-#       - `import cfgutil; cfgutil.TESTING = True`
-#       - if True, will not call cfgutil, but will look for 
-#         kwargs['mock'] or raise RuntimeError
-#       - now sort ECIDs for testing
-# 2.1.1:
-#   - fixed issue where _record() would raise IOError if the record
-#     didn't exist
-# 2.2.0:
-#   - renamed CfgutilError to Error
-#   - re-added CfgutilError(Error)
-#   - Added FatalError(Error): raised when cfgutil exits non-zero 
-#     returncode
-#   - minor logging changes
-#   - minor changes with Exception types
-#   - modified cfgutil() to raise FatalError with non-zero returncode
-#
-# 2.3.0:
-#   - added install_wifi_profile()
-# 2.3.1:
-#   - added Error.ecids property
-# 2.3.2:
-#   - removed Authorization()
-#   - renamed CfgutilError -> Error:
-#       - CfgutilError inherits from Error
-#       - now CfgutilFatalError will have same functions as CfgutilError
-# 2.3.3:
-#   - modified list() to use Result class
-#   - added documentation
-#
-# 2.4.0:
-#   - major changes to cfgutil()
-#   - built-in logging
-#   - log property
-#   - simplified execution
-# 2.4.1:
-#   - removed extra code
-#   - modified errors
-
-# 2.5.0:
-#   - added restart() and shutdown()
+# suppress "No handlers could be found" message
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 CFGUTILBIN = '/usr/local/bin/cfgutil'
 
-## file to record all execution to > cfgutil.log = '/path/to/file'
+# record raw execution info (cfgutil.log = '/path/to/execution.log')
 log = None
 
-## Add NullHandler to the logger (in case logging hasn't been setup)
-logging.getLogger(__name__).addHandler(logging.NullHandler())
-
-
+# TO-DO: this was a mistake (I need to move this all to CfgutilError)
 class Error(Exception):
 
     def __init__(self, info, msg='', cmd=None):
@@ -136,12 +58,17 @@ class Error(Exception):
 
 
 class FatalError(Error):
-    '''Raised when execution of cfgutil completely fails
-    '''
+    """
+    Raised when execution of cfgutil completely fails
+    """
     pass
 
 
-class AuthenticationError(Error):
+class AuthenticationError(Exception):
+    """
+    Raised when incorrect Authentication was provided
+    OR when Authentication required and None or incorrect
+    """
     pass
 
 
@@ -152,7 +79,7 @@ class CfgutilError(Error):
     
 
 class Result(object):
-    def __init__(self, cfgout, ecids=[], err=[], cmd=[]):
+    def __init__(self, cfgout, ecids=(), err=(), cmd=()):
         self._output = cfgout
         self.cmdargs = cmd
         self.command = cfgout.get('Command', '')
@@ -175,29 +102,32 @@ class Authentication(object):
         self.cert = cert
     
     def _verify(self, file):
-        '''
+        """
         verify file exists and has the correct permissions
-        '''
+        """
         self.log.debug("verifying: %r", file)
         if not os.path.exists(file):
-            err = "no such file: {0}".format(file)
-            raise AuthenticationError(err)
+            self.log.error("no such file: %r", file)
+            raise AuthenticationError(e)
         ## check file permissions are 0600 ~ '-rw-------'
         mode = stat.S_IMODE(os.stat(file).st_mode)
         if mode != (stat.S_IREAD|stat.S_IWRITE):
-            err = "invalid permissions: {0:04do}: {1}".format(mode,file)
-            raise AuthenticationError(err)
+            e = "invalid permissions: {0:04do}: {1}".format(mode, file)
+            self.log.error(e)
+            raise AuthenticationError(e)
         self.log.debug("verified: %r", file)
     
     def args(self):
-        '''returns list of arguments for cfgutil()
-        '''
+        """
+        :return: list of arguments for cfgutil()
+        """
         return ['-C', self.cert, '-K', self.key]
 
 
 def requires_authentication(subcmd):
-    '''returns True if specifed subcommand requires authentication
-    '''
+    """
+    :return: True if specifed subcommand requires authentication
+    """
     cmds = ['add-tags', 'activate', 'get-unlock-token',
             'install-app', 'install-profile',
             'remove-profile', 'restart', 'restore',
@@ -207,7 +137,15 @@ def requires_authentication(subcmd):
     else:
         return False
 
+
 def _record(file, info):
+    """
+    Record raw data to specified file
+
+    :param path:    path to file
+    :param info:    dict of info to record
+    :return: None
+    """
     logger = logging.getLogger(__name__)
     logger.debug("recording execution to: %r", file)
 
@@ -224,24 +162,40 @@ def _record(file, info):
     else:
         with open(file, 'a+') as f:
             f.write("{0}\n".format(info))
-        
-def erase(ecids, auth=None):
-    '''erase specified ECIDs
-    '''
-    if not ecids:
-        raise Error('no ECIDs specified')
-    return cfgutil('erase', ecids, [], auth)
+
     
-def get(keys, ecids):
-    '''get information about <keys> from specified ECIDs
-    '''
+def erase(ecids, auth=None):
+    """
+    Erase devices
+
+    :param ecids:   iterable of ECIDs
+    :param auth:    Authentication object
+    :returns:       cfgutil.Result
+    """
     if not ecids:
-        raise Error('no ECIDs specified')
+        raise ValueError('no ECIDs specified')
+    return cfgutil('erase', ecids, [], auth)
+
+
+def get(keys, ecids):
+    """
+    Get information about <keys> from specified ECIDs
+
+    :param keys:    list of property keys supported by `cfgutil`
+    :param ecids:   list of ECIDs
+    :returns:       cfgutil.Result
+    """
+    if not ecids:
+        raise ValueError('no ECIDs specified')
     return cfgutil('get', ecids, keys)
 
+
+# TO-DO: this should be changed to list_devices
 def list(ecids=None):
-    '''
-    Returns list of dicts for attached devices
+    """
+    Get connected devices
+    
+    :returns:    list of dicts for attached devices
     
     Each dict will have the following keys defined:
         UDID, ECID, name, deviceType, locationID
@@ -258,18 +212,26 @@ def list(ecids=None):
       'deviceType': 'iPad8,1',
       'locationID': 337907712,
       'name': 'checkout-ipad-2'}, ...]
-    '''
+    """
     _ecids = ecids if ecids else []
     result = cfgutil('list', _ecids, [])
     return [info for info in result.output.values()]
 
+
 def wallpaper(ecids, image, auth, args=None):
-    '''Set the wallpaper of specified ECIDs using image
-    '''
+    """
+    Set the wallpaper of specified ECIDs using image
+
+    :param ecids:   list of ECIDs
+    :param image:   path to image
+    :param auth:    cfgutil.Authentication
+    :param args:    list of additional arguments for `cfgutil`
+    :returns:        cfgutil.Result
+    """
     if not ecids:
-        raise Error('no ECIDs specified')
+        raise ValueError('no ECIDs specified')
     elif not image:
-        raise Error('no image was specfied')
+        raise ValueError('no image was specfied')
 
     if not args:
         args = ['--screen', 'both']
@@ -277,18 +239,24 @@ def wallpaper(ecids, image, auth, args=None):
 
     return cfgutil('wallpaper', ecids, args, auth)
 
+
 def install_wifi_profile(ecids, profile):
-    '''install wifi profile on unmanaged devices
+    """
+    Install wifi profile on unmanaged devices
+
+    :param ecids:       list of ecids
+    :param profile:     path to wifi profile
+    :returns:           None
+
     NOTE:
         install-profile reports failure, but allows the wifi profile to 
         be installed regardless 
     
-    Currently there is no support for checking if the wifi profile was 
-    actually installed
-    
-    '''
+        Currently there is no support for checking if the wifi profile was 
+        actually installed
+    """
     if not ecids:
-        raise Error('no ECIDs specified')
+        raise ValueError('no ECIDs specified')
     if not os.path.exists(profile):
         raise Error("profile missing: {0}".format(profile))
 
@@ -302,49 +270,74 @@ def install_wifi_profile(ecids, profile):
     except:
         pass
 
+
 def restart(ecids, auth):
     if not ecids:
-        raise Error('no ECIDs specified')
+        raise ValueError('no ECIDs specified')
     return cfgutil('restart', ecids, [], auth)
+
 
 def shutdown(ecids, auth):
     if not ecids:
-        raise Error('no ECIDs specified')
+        raise ValueError('no ECIDs specified')
     return cfgutil('shut-down', ecids, [], auth)
 
+
+# TO-DO: combine prepareManually and prepareDEP to prepare()
+# def prepare(ecids, args=None):
+#     if not ecids:
+#         raise ValueError('no ECIDs specified')
+#     if not args:
+#         args = ['--dep', '--skip-language', '--skip-region']
+#      return cfgutil('prepare', ecids, args)
+
+# TO-DO: remove (see prepare above)
 def prepareDEP(ecids):
-    '''prepare specified ECIDs using DEP
-    '''
+    """
+    Prepare devices using DEP
+    """
     if not ecids:
-        raise Error('no ECIDs specified')
+        raise ValueError('no ECIDs specified')
     args = ['--dep', '--skip-language', '--skip-region']
     return cfgutil('prepare', ecids, args)
 
+
+# TO-DO: remove (see prepare above)
 def prepareManually(ecids):
-    '''prepare devices manually
-    '''
+    """
+    Prepare devices manually (Not Implemented)
+    """
     raise NotImplementedError('prepareManually')
     if not ecids:
-        raise Error('no ECIDs specified')
- 
+        raise ValueError('no ECIDs specified')
+
+
 def cfgutil(command, ecids, args, auth=None):
-    '''
-    Executes /usr/local/bin/cfgutil with specified arguments
-    returns Result() object
-    '''
+    """
+    Executes `cfgutil` with specified arguments
+
+    :param command:     command to execute
+    :param ecids:       list of device ECIDs
+    :param args:        list of additional arguments for `cfgutil`
+    :param auth:        cfgutil.Authentication     
+
+    :return:    cfgutil.Result
+
+    :raises:    cfgutil.AuthenticationError when command requires authorization
+                    but None, or invalid authentication provided
+    :raises:    cfgutil.FatalError on non-zero status (nothing was modified)
+    :raises:    cfgutil.CfgutilError some modification (but not all)
+    """
     logger = logging.getLogger(__name__)
 
     # build the command
     cmd = [CFGUTILBIN, '--format', 'JSON']
 
     if not command:
-        err = 'no command was specfied'
-        logger.error(err)
-        raise Error(err)
+        raise ValueError('no command was specified')
 
     # list of sub-commands that require authentication
     if requires_authentication(command) or auth:
-        # log.debug("auth: {0}".format(auth.args()))
         try:
             cmd += auth.args()
         except AttributeError:
@@ -352,56 +345,55 @@ def cfgutil(command, ecids, args, auth=None):
             raise
 
     # pre-append '--ecid' per (sorted) ECID as flat list
-    #   i.e. [ecid1, ecid2] -> ['--ecid', ecid1, '--ecid', ecid2]
-    # and add ecids to the command
+    # i.e. [ecid1, ecid2] -> ['--ecid', ecid1, '--ecid', ecid2]
     cmd += [x for e in sorted(ecids) for x in ('--ecid', e)]
 
     # finally, add the command and args
     cmd += [command] + args
 
     logger.info("> {0}".format(" ".join(cmd)))
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
-                              stderr=subprocess.PIPE)
-
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()    
+
     logger.debug("    output: %r", out)
     logger.debug("     error: %r", err)
     logger.debug("returncode: %r", p.returncode)
+
     if log:
         # record everything to specified file (if cfgutil.log)
         try:
             _record(log, {'execution': cmd, 'output': out, 'error': err,
-                       'ecids': ecids, 'args': args, 'command': command,
-                       'returncode': p.returncode})
+                          'ecids': ecids, 'args': args, 'command': command,
+                          'returncode': p.returncode})
         except:
-            logger.exception("failed to record execution data")
+            logger.debug("failed to record execution data")
+
     if out:
         try:
             cfgout = json.loads(out)
-            logger.debug("JSON: %r", cfgout)
         except:
-            logger.exception("failed to load JSON")
-            logger.debug("invalid JSON: %r", out)
+            logger.error("%s: returned invalid JSON: %r", command, out)
             raise
     else:
         logger.debug("no JSON output returned")
-        cfgout = {'Command':command, 'Type':'Error', 
-                  'Message': 'output: {0!r}'.format(out),
-                  'FailureReason': 'cfgutil did not return valid JSON',
-                  'Output': {}}
+        cfgout = {'Command': command, 'Type': 'Error', 
+                  'Message': err, 'Details': u"ERR: {0!r}".format(err),
+                  'FailureReason': 'missing output', 'Output': {}}
 
     # cfgutil command failed (action wasn't performed)
     if p.returncode != 0:
         cfgerr = err if err else "cfgutil: {0}: failed".format(command)
         raise FatalError(cfgout, cfgerr, command)
 
-    type = cfgout.get('Type')
-    if type == 'Error':
+    _type = cfgout.get('Type')
+    if _type == 'Error':
         raise CfgutilError(cfgout, 'Unknown error', command)
-    elif type is None:
+    elif _type is None:
+        # TO-DO: remove (this shouldn't happen ever)
         raise Error(cfgout, 'unexpected output type', command)
 
     return Result(cfgout, ecids, cmd)
+
 
 if __name__ == '__main__':
     pass

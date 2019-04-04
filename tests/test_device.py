@@ -1,186 +1,134 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 import os
+import time
 import shutil
 import unittest
 import plistlib
 import threading
 from datetime import datetime, timedelta
 
-'''Tests for ipadmanager.device
-'''
+"""
+Tests for aeios.device
+"""
 
-## import modules to test
-try:
-    from aeios.device import Device, DeviceError
-    from aeios.config import FileLock
-except ImportError:
-    import sys
-    LOCATION = os.path.join(os.path.dirname(__file__))
-    sys.path.append(os.path.dirname(LOCATION))
-    from aeios.device import Device, DeviceError
-    from aeios.config import FileLock
+# import modules to test
 
+from aeios import device
+from aeios import config
 
-__author__ = "Sam Forester"
-__email__ = "sam.forester@utah.edu"
-__copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
-__license__ = "MIT"
-__version__ = '1.0.4'
-__url__ = None
-__description__ = 'Tests for ipadmanager.device'
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = "1.0.4"
 
-## location for temporary files created with tests
+# location for temporary files created with tests
 LOCATION = os.path.join(os.path.dirname(__file__))
-TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp', 'device')
+TMPDIR = os.path.join(LOCATION, 'tmp', 'device')
 
 def setUpModule():
-    '''create tmp directory
-    '''
+    """
+    create tmp directory
+    """
     try:
         os.makedirs(TMPDIR)
     except OSError as e:
         if e.errno != 17:
-            # raise Exception unless TMP already exists
+            # raise Exception unless TMPDIR already exists
             raise
     
 def tearDownModule():
-    '''remove tmp directory
-    '''
+    """
+    remove tmp directory
+    """
     shutil.rmtree(TMPDIR)
 
 
 class TestNewDeviceInit(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        '''One time setup for this TestCase. 
-        If Exception is raised, no tests are run.
-        '''
-        pass
-        
-    @classmethod
-    def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
-        pass
-
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'new')
-        self.info = {'locationID':'0x00000001',
-                     'UDID':'a0111222333444555666777888999abcdefabcde',
-                     'ECID': '0x123456789ABCD0',
-                     "name":"checkout-ipad-1",
-                     "deviceType":"iPad7,5"}
-        ecid = self.info['ECID']
-        self.ecid = ecid
-        self.file = os.path.join(self.path, "{0}.plist".format(ecid))
-        # self.device = Device(id='init_test', path=self.path)
+        self.dir = os.path.join(TMPDIR, 'new')
+        self.ecid = '0x123456789ABCD0'
+        self.udid = 'a0111222333444555666777888999abcdefabcde'
+        self.name = 'test-ipad-1'
+        self.devicetype = 'iPad7,5'
+        self.data = {'locationID': '0x00000001',
+                     'UDID': self.udid,
+                     'ECID': self.ecid,
+                     "name": self.name,
+                     "deviceType": self.devicetype}
+        self.file = os.path.join(self.dir, "{0}.plist".format(self.ecid))
+        # self.device = device.Device(self.ecid, self.data, path=self.dir)
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
+        """
+        remove the device record after each run
+        """
         try:
             os.remove(self.file)
         except OSError as e:
             if e.errno != 2:
                 raise
     
-    @unittest.skip("revisit")
     def test_minimal_init_succeeds(self):
-        min = {k:self.info.get(k) for k in ['UDID','deviceType']}
-        d = Device(self.ecid, info=min, path=self.path)
+        data = {'UDID': self.udid,
+                'ECID': self.ecid, 
+                'deviceType': self.devicetype}
+        d = device.Device(self.ecid, info=data, path=self.dir)
 
-    @unittest.skip("revisit")
-    def test_minimal_init_not_modified(self):
-        min = {k:self.info.get(k) for k in ['UDID','deviceType']}
-        d = Device(self.ecid, info=min, path=self.path)
-        with self.assertRaises(KeyError):
-            min['UDID']
-
-    @unittest.skip("revisit")
-    def test_init_duplicate_udid(self):
-        min = {k:self.info.get(k) for k in ['ECID','deviceType','UDID']}
-        d = Device(self.ecid, info=min, path=self.path)
-
-    @unittest.skip("revisit")
-    def test_alternative_minimal_init_succeeds(self):
-        min = {k:self.info.get(k) for k in ['UDID','deviceType']}
-        d = Device(None, info=min, path=self.path)
-
-    def test_alternative_minimal_init_fails_missing_udid(self):
-        min = {k:self.info.get(k) for k in ['ECID','deviceType']}
-        with self.assertRaises(DeviceError):
-            Device(None, info=min, path=self.path)
+    def test_alternative_minimal_init_fails_missing_ecid(self):
+        data = {'UDID': self.udid, 
+                'deviceType': self.devicetype}
+        with self.assertRaises(device.DeviceError):
+            device.Device(None, info=data, path=self.dir)
 
     def test_init_fails_missing_info(self):
-        with self.assertRaises(DeviceError):
-            d = Device(self.ecid, path=self.path)
+        with self.assertRaises(device.DeviceError):
+            d = device.Device(self.ecid, path=self.dir)
 
-    def test_minimal_init_fails_missing_ecid(self):
-        min = {'deviceType':self.info.get('deviceType')}
-        with self.assertRaises(DeviceError):
-            d = Device(self.ecid, info=min, path=self.path)
+    def test_minimal_init_fails_missing_udid(self):
+        data = {'deviceType': self.devicetype}
+        with self.assertRaises(device.DeviceError):
+            d = device.Device(self.ecid, info=data, path=self.dir)
 
     def test_minimal_init_fails_missing_deviceType(self):
-        min = {'ECID':self.info.get('ECID')}
-        with self.assertRaises(DeviceError):
-            d = Device(self.ecid, info=min, path=self.path)
+        data = {'ECID': self.ecid}
+        with self.assertRaises(device.DeviceError):
+            d = device.Device(self.ecid, info=data, path=self.dir)
 
     def test_device_record_created(self):
-        min = {k:self.info.get(k) for k in ['UDID','ECID','deviceType']}
-        d = Device(self.ecid, info=min, path=self.path)
+        data = {'UDID': self.udid,
+                'ECID': self.ecid, 
+                'deviceType': self.devicetype}
+        d = device.Device(self.ecid, info=data, path=self.dir)
         self.assertTrue(os.path.exists(d.file))
 
     def test_device_record_has_keys(self):
-        keys = ['UDID','ECID','deviceType']
-        min = {k:self.info.get(k) for k in keys}
-        d = Device(self.ecid, info=min, path=self.path)
-        for key,value in plistlib.readPlist(d.file).items():
-            expected = self.info.get(key)
+        data = {'UDID': self.udid,
+                'ECID': self.ecid, 
+                'deviceType': self.devicetype}
+        d = device.Device(self.ecid, info=data, path=self.dir)
+        for key, value in plistlib.readPlist(d.file).items():
+            expected = self.data.get(key)
             self.assertEquals(expected, value)
 
     def test_device_record_has_all_keys(self):
-        d = Device(self.ecid, info=self.info, path=self.path)
+        d = device.Device(self.ecid, info=self.data, path=self.dir)
         result = plistlib.readPlist(d.file)
-        self.assertEquals(result, self.info)
+        self.assertEquals(result, self.data)
 
     def test_device_record_no_extra_keys(self):
-        d = Device(self.ecid, info=self.info, path=self.path)
+        d = device.Device(self.ecid, info=self.data, path=self.dir)
         result = plistlib.readPlist(d.file)
         for k in result.keys():
-            self.assertIsNotNone(self.info.get(k))
-
-    @unittest.skip("revisit")
-    def test_device_udid_mismatch(self):
-        min = {k:self.info.get(k) for k in ['ECID','deviceType','UDID']}
-        incorrect = "{0}bad".format(self.ecid)
-        with self.assertRaises(DeviceError):
-            Device(incorrect, info=min, path=self.path)
+            self.assertIsNotNone(self.data.get(k))
 
 
 class TestExistingDeviceInit(unittest.TestCase):
 
-    file = None
-    @classmethod
-    def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
-        try:
-            os.remove(cls.file)
-        except OSError as e:
-            if e.errno != 2:
-                raise
-
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'existing')
+        self.dir = os.path.join(TMPDIR, 'existing')
         self.orig = {'ECID': '0x1D481C2E300026',
                      'UDID': 'fbe61f791f298c66ebb00a282f5b070c6cb9dc47',
                      'bootedState': 'Booted',
@@ -190,13 +138,14 @@ class TestExistingDeviceInit(unittest.TestCase):
                      'firmwareVersion': '11.3.1',
                      'locationID': '0x14100000'}
         self.ecid = self.orig.get('ECID')
-        self.device = Device(self.ecid, info=self.orig, 
-                                    path=self.path)
+        self.device = device.Device(self.ecid, info=self.orig, 
+                                    path=self.dir)
         self.__class__.file = self.file = self.device.file
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
+        """
+        remove the device record file after each run
+        """
         try:
             os.remove(self.file)
         except OSError as e:
@@ -204,17 +153,17 @@ class TestExistingDeviceInit(unittest.TestCase):
                 raise
                 
     def test_existing_record_initialized(self):
-        Device(self.ecid, path=self.path)
+        device.Device(self.ecid, path=self.dir)
 
     def test_existing_record_no_info(self):
-        d = Device(self.ecid, path=self.path)
+        d = device.Device(self.ecid, path=self.dir)
         for key,value in plistlib.readPlist(d.file).items():
             self.assertEquals(self.orig[key], value)
 
     def test_existing_record_updated(self):
         new = {'deviceName':'iPad', 'firmwareVersion':'12.0',
                'locationID':'0x14100001', 'buildVersion': '15E303'}
-        d = Device(self.ecid, info=new, path=self.path)
+        d = device.Device(self.ecid, info=new, path=self.dir)
         
         result = plistlib.readPlist(d.file)
         for key,value in result.items():
@@ -225,37 +174,29 @@ class TestExistingDeviceInit(unittest.TestCase):
     def test_existing_record_updated2(self):
         new = {'deviceName':'iPad', 'firmwareVersion':'12.0',
                'locationID':'0x14100001', 'buildVersion': '15E303'}
-        d = Device(self.ecid, info=new, path=self.path)
+        d = device.Device(self.ecid, info=new, path=self.dir)
         
         result = plistlib.readPlist(d.file)
         for k in new.keys():
             self.assertNotEqual(result[k], self.orig[k])
 
-    @unittest.skip("revisit")
-    def test_verify_mismatching_UDID(self):
-        mismatch = {'UDID': 'mismatch'}
-        with self.assertRaises(DeviceError):
-            Device(self.ecid, info=mismatch, path=self.path)
-
     def test_verify_mismatching_deviceType(self):
         mismatch = {'deviceType': 'mismatch'}
-        with self.assertRaises(DeviceError):
-            Device(self.ecid, info=mismatch, path=self.path)
+        with self.assertRaises(device.DeviceError):
+            device.Device(self.ecid, info=mismatch, path=self.dir)
 
     def test_verify_mismatching_ECID(self):
         mismatch = {'ECID': 'mismatch'}
-        with self.assertRaises(DeviceError):
-            Device(self.ecid, info=mismatch, path=self.path)
+        with self.assertRaises(device.DeviceError):
+            device.Device(self.ecid, info=mismatch, path=self.dir)
 
 
 class TestDeviceState(unittest.TestCase):
 
     file = None
+
     @classmethod
     def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
         try:
             os.remove(cls.file)
         except OSError as e:
@@ -263,9 +204,7 @@ class TestDeviceState(unittest.TestCase):
                 raise
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'state')
+        self.dir = os.path.join(TMPDIR, 'state')
         now = datetime.now()
         self.orig = {'ECID': '0x123456789ABCD0',
                      'UDID': 'a0111222333444555666777888999abcdefabcde',
@@ -283,13 +222,14 @@ class TestDeviceState(unittest.TestCase):
                      'firmwareVersion': '11.3.1',
                      'locationID': '0x00000001'}
         self.ecid = self.orig.get('ECID')
-        self.device = Device(self.ecid, info=self.orig, 
-                                    path=self.path)
+        self.device = device.Device(self.ecid, info=self.orig, 
+                                    path=self.dir)
         self.__class__.file = self.file = self.device.file
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
+        """
+        remove the device record file after each run
+        """
         try:
             os.remove(self.file)
         except OSError as e:
@@ -330,11 +270,9 @@ class TestDeviceState(unittest.TestCase):
 class TestDeviceName(unittest.TestCase):
 
     file = None
+
     @classmethod
     def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
         try:
             os.remove(cls.file)
         except OSError as e:
@@ -342,10 +280,8 @@ class TestDeviceName(unittest.TestCase):
                 raise
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'name')
-        self.info = {'ECID': '0x123456789ABCD0',
+        self.dir = os.path.join(TMPDIR, 'name')
+        self.data = {'ECID': '0x123456789ABCD0',
                      'UDID': 'a0111222333444555666777888999abcdefabcde',
                      'bootedState': 'Booted',
                      'buildVersion': '15E302',
@@ -353,15 +289,16 @@ class TestDeviceName(unittest.TestCase):
                      'deviceType': 'iPad7,5',
                      'firmwareVersion': '11.3.1',
                      'locationID': '0x00000001'}
-        self.ecid = self.info.get('ECID')
-        self.device = Device(self.ecid, info=self.info, 
-                                    path=self.path)
+        self.ecid = self.data.get('ECID')
+        self.device = device.Device(self.ecid, info=self.data, 
+                                    path=self.dir)
         self.device._testing = True
         self.__class__.file = self.file = self.device.file
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
+        """
+        remove the device record file after each run
+        """
         try:
             os.remove(self.file)
         except OSError as e:
@@ -369,7 +306,7 @@ class TestDeviceName(unittest.TestCase):
                 raise
                 
     def test_get_name(self):
-        expected = self.info['deviceName']
+        expected = self.data['deviceName']
         self.assertEquals(self.device.name, expected)
 
     def test_set_name(self):
@@ -378,7 +315,7 @@ class TestDeviceName(unittest.TestCase):
         self.assertEquals(self.device.name, result['name'])
 
     def test_getting_name_sets_name(self):
-        expected = self.info['deviceName']
+        expected = self.data['deviceName']
         name = self.device.name
         result = self.device.record
         self.assertEquals(result['name'], expected)
@@ -391,7 +328,7 @@ class TestDeviceName(unittest.TestCase):
     def test_new_device_name_does_not_affect_name(self):
         name = self.device.name
         _info = {'deviceName': 'iPad'}
-        d = Device(self.ecid, info=_info, path=self.path)
+        d = device.Device(self.ecid, info=_info, path=self.dir)
         result = self.device.record
         self.assertNotEqual(result['name'], result['deviceName'])
 
@@ -399,11 +336,9 @@ class TestDeviceName(unittest.TestCase):
 class TestDeviceRestarting(unittest.TestCase):
 
     file = None
+
     @classmethod
     def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
         try:
             os.remove(cls.file)
         except OSError as e:
@@ -411,10 +346,8 @@ class TestDeviceRestarting(unittest.TestCase):
                 raise
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'restarting')
-        self.info = {'ECID': '0x123456789ABCD0',
+        self.dir = os.path.join(TMPDIR, 'restarting')
+        self.data = {'ECID': '0x123456789ABCD0',
                      'UDID': 'a0111222333444555666777888999abcdefabcde',
                      'bootedState': 'Booted',
                      'buildVersion': '15E302',
@@ -423,13 +356,11 @@ class TestDeviceRestarting(unittest.TestCase):
                      'firmwareVersion': '11.3.1',
                      'locationID': '0x00000001'}
         self.ecid = 'a0111222333444555666777888999abcdefabcde'
-        self.device = Device(self.ecid, info=self.info, 
-                                    path=self.path)
+        self.device = device.Device(self.ecid, info=self.data, 
+                                    path=self.dir)
         self.__class__.file = self.file = self.device.file
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
         try:
             os.remove(self.file)
         except OSError as e:
@@ -472,11 +403,9 @@ class TestDeviceRestarting(unittest.TestCase):
 class TestDeviceEnrolled(unittest.TestCase):
 
     file = None
+
     @classmethod
     def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
         try:
             os.remove(cls.file)
         except OSError as e:
@@ -484,10 +413,8 @@ class TestDeviceEnrolled(unittest.TestCase):
                 raise
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'enrolled')
-        self.info = {'ECID': '0x123456789ABCD0',
+        self.dir = os.path.join(TMPDIR, 'enrolled')
+        self.data = {'ECID': '0x123456789ABCD0',
                      'UDID': 'a0111222333444555666777888999abcdefabcde',
                      'bootedState': 'Booted',
                      'buildVersion': '15E302',
@@ -496,13 +423,14 @@ class TestDeviceEnrolled(unittest.TestCase):
                      'firmwareVersion': '11.3.1',
                      'locationID': '0x00000001'}
         self.ecid = '0x123456789ABCD0'
-        self.device = Device(self.ecid, info=self.info, 
-                                    path=self.path)
+        self.device = device.Device(self.ecid, info=self.data, 
+                                    path=self.dir)
         self.__class__.file = self.file = self.device.file
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
+        """
+        remove the device record file after each run
+        """
         try:
             os.remove(self.file)
         except OSError as e:
@@ -533,11 +461,12 @@ class TestDeviceEnrolled(unittest.TestCase):
 class TestDeviceCheckin(unittest.TestCase):
 
     file = None
+
     @classmethod
     def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
+        """One time cleanup for this TestCase. 
         Skipped if setUpClass raises an Exception
-        '''
+        """
         try:
             os.remove(cls.file)
         except OSError as e:
@@ -545,10 +474,8 @@ class TestDeviceCheckin(unittest.TestCase):
                 raise
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'checkin')
-        self.info = {'ECID': '0x123456789ABCD0',
+        self.dir = os.path.join(TMPDIR, 'checkin')
+        self.data = {'ECID': '0x123456789ABCD0',
                      'UDID': 'a0111222333444555666777888999abcdefabcde',
                      'bootedState': 'Booted',
                      'buildVersion': '15E302',
@@ -557,13 +484,14 @@ class TestDeviceCheckin(unittest.TestCase):
                      'firmwareVersion': '11.3.1',
                      'locationID': '0x00000001'}
         self.ecid = '0x123456789ABCD0'
-        self.device = Device(self.ecid, info=self.info, 
-                                    path=self.path)
+        self.device = device.Device(self.ecid, info=self.data, 
+                                    path=self.dir)
         self.__class__.file = self.file = self.device.file
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
+        """
+        remove the device record file after each run
+        """
         try:
             os.remove(self.file)
         except OSError as e:
@@ -594,11 +522,9 @@ class TestDeviceCheckin(unittest.TestCase):
 class TestDeviceCheckout(unittest.TestCase):
 
     file = None
+
     @classmethod
     def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
         try:
             os.remove(cls.file)
         except OSError as e:
@@ -606,10 +532,8 @@ class TestDeviceCheckout(unittest.TestCase):
                 raise
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'checkin')
-        self.info = {'ECID': '0x123456789ABCD0',
+        self.dir = os.path.join(TMPDIR, 'checkin')
+        self.data = {'ECID': '0x123456789ABCD0',
                      'UDID': 'a0111222333444555666777888999abcdefabcde',
                      'bootedState': 'Booted',
                      'buildVersion': '15E302',
@@ -618,13 +542,14 @@ class TestDeviceCheckout(unittest.TestCase):
                      'firmwareVersion': '11.3.1',
                      'locationID': '0x00000001'}
         self.ecid = '0x123456789ABCD0'
-        self.device = Device(self.ecid, info=self.info, 
-                                    path=self.path)
+        self.device = device.Device(self.ecid, info=self.data, 
+                                    path=self.dir)
         self.__class__.file = self.file = self.device.file
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
+        """
+        remove the device record file after each run
+        """
         try:
             os.remove(self.file)
         except OSError as e:
@@ -655,15 +580,13 @@ class TestDeviceCheckout(unittest.TestCase):
 class TestDeviceEraseProperty(unittest.TestCase):
 
     file = None
+
     @classmethod
     def setUpClass(cls):
         cls.now = datetime.now()
 
     @classmethod
     def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
         try:
             os.remove(cls.file)
         except OSError as e:
@@ -671,11 +594,9 @@ class TestDeviceEraseProperty(unittest.TestCase):
                 raise
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'checkin')
+        self.dir = os.path.join(TMPDIR, 'checkin')
         self.now = self.__class__.now
-        self.info = {'ECID': '0x123456789ABCD0',
+        self.data = {'ECID': '0x123456789ABCD0',
                      'UDID': 'a0111222333444555666777888999abcdefabcde',
                      'bootedState': 'Booted',
                      'buildVersion': '15E302',
@@ -688,13 +609,14 @@ class TestDeviceEraseProperty(unittest.TestCase):
                      'firmwareVersion': '11.3.1',
                      'locationID': '0x00000001'}
         self.ecid = '0x123456789ABCD0'
-        self.device = Device(self.ecid, info=self.info, path=self.path)
+        self.device = device.Device(self.ecid, info=self.data, path=self.dir)
         self.device.apps = ['app1', 'app2', 'app3']
         self.__class__.file = self.file = self.device.file
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
+        """
+        remove the device record file after each run
+        """
         try:
             os.remove(self.file)
         except OSError as e:
@@ -729,7 +651,7 @@ class TestDeviceEraseProperty(unittest.TestCase):
     def test_erase_removes_other_attributes(self):
         self.assertIsNotNone(self.device.background)
         self.assertIsNotNone(self.device.enrolled)
-        self.assertEquals(self.info['apps'], self.device.apps)
+        self.assertEquals(self.data['apps'], self.device.apps)
         self.device.erased = self.now
         self.assertIsNone(self.device.background)
         self.assertIsNone(self.device.enrolled)
@@ -741,9 +663,6 @@ class TestDeviceLocked(unittest.TestCase):
     file = None
     @classmethod
     def tearDownClass(cls):
-        '''One time cleanup for this TestCase. 
-        Skipped if setUpClass raises an Exception
-        '''
         try:
             os.remove(cls.file)
         except OSError as e:
@@ -751,10 +670,8 @@ class TestDeviceLocked(unittest.TestCase):
                 raise
 
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'checkin')
-        self.info = {'ECID': '0x123456789ABCD0',
+        self.dir = os.path.join(TMPDIR, 'checkin')
+        self.data = {'ECID': '0x123456789ABCD0',
                      'UDID': 'a0111222333444555666777888999abcdefabcde',
                      'bootedState': 'Booted',
                      'buildVersion': '15E302',
@@ -767,13 +684,14 @@ class TestDeviceLocked(unittest.TestCase):
                      'firmwareVersion': '11.3.1',
                      'locationID': '0x00000001'}
         self.ecid = '0x123456789ABCD0'
-        self.device = Device(self.ecid, info=self.info, 
-                                    path=self.path)
+        self.device = device.Device(self.ecid, info=self.data, 
+                                    path=self.dir)
         self.__class__.file = self.file = self.device.file
 
     def tearDown(self):
-        '''remove the device record file after each run
-        '''
+        """
+        remove the device record file after each run
+        """
         try:
             os.remove(self.file)
         except OSError as e:
@@ -809,25 +727,21 @@ class TestDeviceLocked(unittest.TestCase):
 
 
 class TestThreaded(unittest.TestCase):
-    '''Tests involving threading
-    '''
+    """
+    Tests involving threading
+    """
     def setUp(self):
-        '''Runs before each test.
-        '''
-        self.path = os.path.join(TMPDIR, 'threaded')
-        self.info = {'locationID':'0x00000001',
+        self.dir = os.path.join(TMPDIR, 'threaded')
+        self.data = {'locationID':'0x00000001',
                      'UDID':'a0111222333444555666777888999abcdefabcde',
                      'ECID': '0x123456789ABCD0',
                      "deviceType":"iPad7,5"}
-        self.ecid = self.info.get('ECID')
-        self.device = Device(self.ecid, info=self.info, 
-                                    path=self.path)
-        self.device2 = Device(self.ecid, path=self.path)
-        self.device3 = Device(self.ecid, path=self.path)
+        self.ecid = self.data['ECID']
+        self.device = device.Device(self.ecid, info=self.data, path=self.dir)
+        self.device2 = device.Device(self.ecid, path=self.dir)
+        self.device3 = device.Device(self.ecid, path=self.dir)
         
     def tearDown(self):
-        '''Runs after each test.
-        '''
         try:
             os.remove(self.device.file)
         except OSError as e:
@@ -835,17 +749,19 @@ class TestThreaded(unittest.TestCase):
                 raise
 
     def test_threaded_update(self):
-        '''test threaded devices update as expected
-        '''
-        
+        """
+        test threaded devices update as expected
+        """
         # function for threading
         def threaded_update(d, k, v):
             d.update(k, v)
+
         t1 = threading.Thread(target=threaded_update, 
-                              args=(self.device2,'name','d2'))
+                              args=(self.device2, 'name', 'd2'))
         t2 = threading.Thread(target=threaded_update, 
                               args=(self.device3, 'name', 'd3'))
         t1.start()
+        time.sleep(0.001)
         t2.start()
         t1.join()
         t2.join()
@@ -855,21 +771,19 @@ class TestThreaded(unittest.TestCase):
 class TestLocking(unittest.TestCase):
 
     def setUp(self):
-        '''Runs before each test.
-        '''
         cls = self.__class__
-        self.path = os.path.join(TMPDIR, 'locking')
-        self.info = {'ECID': '0x123456789ABCD0',
-                     'UDID':'a0111222333444555666777888999abcdefabcde',
-                     "deviceType":"iPad7,5"}
-        self.ecid = self.info.get('ECID')
-        self.device = Device(self.ecid, info=self.info, path=self.path)
-        self.lock = FileLock(self.device.config.lockfile, timeout=1)
+        self.dir = os.path.join(TMPDIR, 'locking')
+        self.data = {'ECID': '0x123456789ABCD0',
+                     'UDID': 'a0111222333444555666777888999abcdefabcde',
+                     'deviceType': 'iPad7,5'}
+        self.ecid = self.data['ECID']
+        self.device = device.Device(self.ecid, info=self.data, path=self.dir)
+        self.lock = config.FileLock(self.device.config.lockfile, timeout=1)
         
     def test_device_locked(self):
         with self.lock.acquire():
-            with self.assertRaises(DeviceError):
-                d = Device(self.ecid, path=self.path, timeout=0)
+            with self.assertRaises(device.DeviceError):
+                d = device.Device(self.ecid, path=self.dir, timeout=0)
         
 
 if __name__ == '__main__':

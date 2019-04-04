@@ -1,46 +1,51 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 import os
-import shutil
-import unittest 
-import logging
 import types
-from datetime import datetime, timedelta
+import shutil
+import logging
+import unittest 
+import datetime as dt
 
 from actools import cfgutil
+from aeios import devicemanager
 
-'''Tests for ipadmanager.devicemanager
-'''
+"""
+Tests for aeios.devicemanager
+"""
 
-import aeios
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright(c) 2019 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = "1.0.1"
 
-__author__ = "Sam Forester"
-__email__ = "sam.forester@utah.edu"
-__copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
-__license__ = "MIT"
-__version__ = '1.0.0'
-__url__ = None
-__description__ = 'Tests for ipadmanager.devicemanager'
+# suppress "No handlers could be found" message
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-## location for temporary files created with tests
-TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp')
+LOCATION = os.path.dirname(__file__)
+DATA = os.path.join(LOCATION, 'data', 'devicemanager')
+TMPDIR = os.path.join(LOCATION, 'tmp', 'devicemanager')
+
 
 def setUpModule():
-    '''create tmp directory
-    '''
+    """
+    create tmp directory
+    """
     try:
-        os.mkdir(TMPDIR)
+        os.makedirs(TMPDIR)
     except OSError as e:
         if e.errno != 17:
-            # raise Exception unless TMP already exists
-            raise
-    
+            raise  # raise unless TMPDIR already exists
+    # aeios.resources.PATH = TMPDIR
+    # aeios.resources.PREFERENCES = TMPDIR
+
+
 def tearDownModule():
-    '''remove tmp directory
-    '''
-    #shutil.rmtree(TMPDIR)
-    pass
+    """
+    remove tmp directory
+    """
+    shutil.rmtree(TMPDIR)
 
 
 class BaseTestCase(unittest.TestCase):
@@ -139,18 +144,18 @@ class BaseTestCase(unittest.TestCase):
         pass
         
     def setUp(self):
-        id = 'edu.utah.mlib.test'
         self.path = self.__class__.tmp
-        logging.basicConfig(level=logging.CRITICAL)
-        self.manager = aeios.DeviceManager(id, path=self.path)
+        # logging.basicConfig(level=logging.CRITICAL)
+        self.manager = devicemanager.DeviceManager(path=self.path)
         self.env = self.__class__.env
         self.info = self.env
-        self.now = datetime.now()
+        self.now = dt.datetime.now()
         self.devices = []
         self.__class__.file = self.manager.file
     
     def tearDown(self):
-        self.logger.setLevel(logging.CRITICAL)
+        # self.logger.setLevel(logging.CRITICAL)
+        pass
 
 
 class TestCheckin(BaseTestCase):
@@ -163,28 +168,31 @@ class TestCheckin(BaseTestCase):
 class TestCheckout(BaseTestCase):
 
     def test_never_checked_in(self):
-        '''Test that a device that has never been checked in
-        '''
+        """
+        test that a device that has never been checked in
+        """
         for info in self.info:
             self.manager.checkout(info)
 
 
 class TestNeedsErase(BaseTestCase):
-    '''Tests for detecting if a device needs to be erased
-    '''
+    """
+    Tests for detecting if a device needs to be erased
+    """
     
     def setUp(self):
         super(self.__class__, self).setUp()
         d = self.env[0]
         self.device = self.manager.device(d['ECID'], d)
-        self.now = datetime.now()
+        self.now = dt.datetime.now()
     
     def test_unmanaged_device(self):
-        '''test unmanaged devices will not be erased
-        '''
-        ## Object Method patching
-        #  replace our manager's managed function with one that simply 
-        #  returns False. The function will be reset on next setUp
+        """
+        test unmanaged devices will not be erased
+        """
+        # Object Method patching
+        #   replace our manager's managed function with one that simply 
+        #   returns False. The function will be reset on next setUp
         def _dummy(self, x):
             return False
         self.manager.managed = types.MethodType(_dummy, self.manager)
@@ -192,65 +200,68 @@ class TestNeedsErase(BaseTestCase):
         self.assertFalse(self.manager.need_to_erase(self.device))
 
     def test_not_checkedin(self):
-        '''test non-checkedin device will be erased
-        '''
+        """
+        test non-checkedin device will be erased
+        """
         self.device.checkin = None
         self.assertTrue(self.manager.need_to_erase(self.device))
-        self.device.checkin = datetime.now()
+        self.device.checkin = dt.datetime.now()
 
     def test_restarting(self):
-        '''test restarting device will be erased
-        '''
+        """
+        test restarting device will be erased
+        """
         self.device.restarting = True
         self.assertFalse(self.manager.need_to_erase(self.device))
         
     def test_quick_disconnect(self):
-        '''test devices that quickly disconnect and reconnect
-        '''
-        self.device.erased = self.now - timedelta(minutes=5)
-        self.device.checking = self.now - timedelta(seconds=10)
+        """
+        test devices that quickly disconnect and reconnect
+        """
+        self.device.erased = self.now - dt.timedelta(minutes=5)
+        self.device.checking = self.now - dt.timedelta(seconds=10)
         self.device.checkout = self.now
         self.device.restarting = False
-        # self.logger.setLevel(logging.DEBUG)
         self.assertFalse(self.manager.need_to_erase(self.device))
 
     def test_not_erased(self):
-        '''test devices that have not been erased will be
-        '''
+        """
+        test devices that have not been erased will be
+        """
         self.device.erased = None
-        # self.logger.setLevel(logging.DEBUG)
         self.assertTrue(self.manager.need_to_erase(self.device))
 
     def test_erased_more_than_timeout_with_blink(self):
-        '''test device was erased but exceed the timeout
-        '''
-        self.device.erased = self.now - timedelta(minutes=12)
-        self.device.checkin = self.now - timedelta(seconds=10)
+        """
+        test device was erased but exceeds the timeout
+        """
+        self.device.erased = self.now - dt.timedelta(minutes=12)
+        self.device.checkin = self.now - dt.timedelta(seconds=10)
         self.device.checkout = self.now
         self.restarting = False
-        # self.logger.setLevel(logging.DEBUG)
         self.assertFalse(self.manager.need_to_erase(self.device))
 
     def test_valid_checkout(self):
-        '''test valid device checkout
-        '''
+        """
+        test valid device checkout
+        """
         device = self.manager.device(self.device.ecid)
-        self.device.erased = self.now - timedelta(hours=3)
-        self.device.checkin = self.now - timedelta(hours=2)
-        self.device.checkout = self.now - timedelta(hours=1)
+        self.device.erased = self.now - dt.timedelta(hours=3)
+        self.device.checkin = self.now - dt.timedelta(hours=2)
+        self.device.checkout = self.now - dt.timedelta(hours=1)
         self.device.restarting = False
-        # self.logger.setLevel(logging.DEBUG)
         self.assertTrue(self.manager.need_to_erase(self.device))
 
 
 class TestListRefresh(BaseTestCase):
-    '''Complicated tests relying on the replacement of an underlying
-    function used by aeios.DeviceManager.list()
+    """
+    Complicated tests relying on the replacement of an underlying
+    function used by devicemanager.DeviceManager.list()
 
     tests verify that the manager caches the results to a file and
     reads the cached results when appropriate as well as refreshes
     the cache when appropriate
-    '''
+    """
     @classmethod
     def setUpClass(cls):
         super(cls, cls).setUpClass()
@@ -263,9 +274,8 @@ class TestListRefresh(BaseTestCase):
         cfgutil.list = cls._cfglist
     
     def setUp(self):
-        '''
-        '''
-        # super(self.__class__, self).setUp()
+        """
+        """
         BaseTestCase.setUp(self)
         # replacement function to return simple list
         self.listed = []
@@ -274,8 +284,8 @@ class TestListRefresh(BaseTestCase):
                                   'deviceName', 'deviceType']}
             self.listed.append(m)
         # manually modify the config file with the cached list
-        self.manager.config.update({'cfgutilList':self.listed,
-                                    'lastListed':self.now})
+        self.manager.config.update({'Devices': self.listed,
+                                    'lastListed': self.now})
 
         # replacement function to return empty list
         def _empty(*args, **kwargs):
@@ -294,7 +304,6 @@ class TestListRefresh(BaseTestCase):
         self.assertEquals(self.listed, _simple())
  
     def tearDown(self):
-        # super(self.__class__, self).tearDown()
         BaseTestCase.tearDown(self)
 
         # remove any cached values
@@ -303,17 +312,17 @@ class TestListRefresh(BaseTestCase):
         except:
             pass
         try:
-            self.manager.config.delete('cfgutilList')
+            self.manager.config.delete('Devices')
         except:
             pass
 
     def test_default_list(self):
-        '''test that given default empty values, cached values are 
-        populated
-        '''
+        """
+        test that given default empty values, cached values are populated
+        """
         # delete the values configured in setUp()
         self.manager.config.delete('lastListed')
-        self.manager.config.delete('cfgutilList')
+        self.manager.config.delete('Devices')
 
         # re-replace cfgutil.list and re-run
         cfgutil.list = self.empty
@@ -321,13 +330,14 @@ class TestListRefresh(BaseTestCase):
 
         # Actual tests
         timestamp = self.manager.config.get('lastListed')
-        cached = self.manager.config.get('cfgutilList')
+        cached = self.manager.config.get('Devices')
         self.assertIsNotNone(timestamp)
         self.assertIsNotNone(cached)
         
     def test_cached_list_returned(self):
-        '''test cached result is returned
-        '''
+        """
+        test cached result is returned
+        """
         # re-replace cfgutil.list (should not be called)
         cfgutil.list = self.empty
         listed = self.manager.list()
@@ -336,17 +346,19 @@ class TestListRefresh(BaseTestCase):
         self.assertEquals(listed, self.listed)
 
     def test_results_cached_to_file(self):
-        '''test cached result is written to file
-        '''
+        """
+        test cached result is written to file
+        """
         listed = self.manager.list()
-        file_cache = self.manager.config.get('cfgutilList')
+        file_cache = self.manager.config.get('Devices')
         self.assertItemsEqual(listed, file_cache)
 
     def test_cached_results_expire(self):
-        '''test cached result expires 
-        '''
+        """
+        test cached result expires 
+        """
         # manually modify the lastListed to 1 minute ago (force update)
-        timestamp = self.now - timedelta(minutes=1)
+        timestamp = self.now - dt.timedelta(minutes=1)
         self.manager.config.update({'lastListed':timestamp})
 
         # re-replace cfgutil.list
@@ -356,8 +368,9 @@ class TestListRefresh(BaseTestCase):
         self.assertEquals(result, self.empty())
 
     def test_forced_refresh(self):
-        '''test list can be forcibly refreshed
-        '''
+        """
+        test list can be forcibly refreshed
+        """
         # re-replace cfgutil.list
         cfgutil.list = self.empty
         # verify manager.list() returns results from second replacement
@@ -366,62 +379,67 @@ class TestListRefresh(BaseTestCase):
         self.assertEquals(result, self.empty())
 
 
-@unittest.skip("Not implemented")
+# @unittest.skip("Not implemented")
 class TestRecords(BaseTestCase):
-    '''
+    """
     Tests for device.Manager.records()
-    '''
+    """
     def test_all_records(self):
-        '''
+        """
         test all device records are returned
-        '''
-        pass
+        """
+        expected = os.listdir(self.manager.resources.devices)
+        result = [x[1] for x in self.manager.records()]
+        self.assertItemsEqual(expected, result)
 
     def test_single_ecid(self):
-        '''
+        """
         test single device record is returned
-        '''
-        pass
+        """
+        ecid1 = self.env[0]['ECID']
+        expected = [(ecid1, "{0}.plist".format(ecid1))]
+        self.assertItemsEqual(expected, self.manager.records([ecid1]))
     
     def test_missing_record(self):
-        '''
+        """
         test empty list is returned for missing record
-        '''
-        pass
+        """
+        self.assertEquals([], self.manager.records('missing'))
 
     def test_specified_ecids(self):
-        '''
+        """
         test specified device records are returned
-        '''
-        pass
+        """
+        ecid1 = self.env[0]['ECID']
+        ecid2 = self.env[1]['ECID']
+        expected = [(ecid1, "{0}.plist".format(ecid1)), 
+                    (ecid2, "{0}.plist".format(ecid2))]
+        self.assertItemsEqual(expected, self.manager.records([ecid1, ecid2]))
 
     def test_non_iterable(self):
-        '''
+        """
         test error is raised when given a non-iterable
-        '''
-        pass
+        """
+        with self.assertRaises(TypeError):
+            self.manager.records(1)
 
     def test_non_ecid(self):
-        '''
+        """
         test empty list is returned for non-ECID
-        '''
-        pass
+        """
+        self.assertEquals([], self.manager.records(['test']))
 
 
 class TestCache(BaseTestCase):
     
     def setUp(self):
         BaseTestCase.setUp(self)
-        self.cache = aeios.Cache(self.manager.config)
+        self.cache = devicemanager.DeviceManager.Cache(self.manager.config)
 
 
 class TestVerify(BaseTestCase):
-    
-#     def setUp(self):
-#         super(self.__class__, self).setUp()
-    
-    def test_devices(self):
-        pass
+    pass
+
 
 class TestThreaded(BaseTestCase):
     pass
@@ -429,4 +447,8 @@ class TestThreaded(BaseTestCase):
 
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    fmt = ('%(asctime)s %(process)d: %(levelname)6s: '
+           '%(name)s - %(funcName)s(): %(message)s')
+    # logging.basicConfig(format=fmt, level=logging.DEBUG)
+    # logging.getLogger('aeios.resources.Resources').setLevel(logging.DEBUG)
+    unittest.main(verbosity=1)

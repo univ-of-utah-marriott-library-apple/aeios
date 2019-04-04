@@ -1,1 +1,0 @@
-{"activity":null,"alerts":[{"options":[],"info":["There was a problem communicating with the VPP store.","An unexpected network error occurred. Check your internet connection and click Try Again to continue.",""],"choices":["Try Again","Network Diagnostics","Cancel"]}],"busy":true}

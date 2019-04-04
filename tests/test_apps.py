@@ -1,40 +1,44 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 import os
 import shutil
+import logging
 import unittest 
 
-'''Tests for ipadmanager.appmanager
-'''
+from aeios import apps, device
 
-from appmanager import AppManager
-from device import Device, DeviceError
+"""
+Tests for aeios.apps
+"""
 
-__author__ = "Sam Forester"
-__email__ = "sam.forester@utah.edu"
-__copyright__ = "Copyright (c) 2018 University of Utah, Marriott Library"
-__license__ = "MIT"
-__version__ = '1.0.2'
-__url__ = None
-__description__ = 'Tests for ipadmanager.appmanager'
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright(c) 2019 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = "1.0.3"
 
-## location for temporary files created with tests
-TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp')
+# suppress "No handlers could be found" message
+logging.getLogger(__name__).addHandler(logging.NullHandler())
+
+LOCATION = os.path.dirname(__file__)
+DATA = os.path.join(LOCATION, 'data', 'devicemanager')
+TMPDIR = os.path.join(LOCATION, 'tmp', 'devicemanager')
+
 
 def setUpModule():
-    '''create tmp directory
-    '''
+    """
+    create tmp directory
+    """
     try:
-        os.mkdir(TMPDIR)
+        os.makedirs(TMPDIR)
     except OSError as e:
         if e.errno != 17:
-            # raise Exception unless TMP already exists
-            raise
+            raise  # raise unless TMPDIR already exists
     
 def tearDownModule():
-    '''remove tmp directory
-    '''
+    """
+    remove tmp directory
+    """
     shutil.rmtree(TMPDIR)
 
 
@@ -51,11 +55,21 @@ class BaseTestCase(unittest.TestCase):
         cls.tmp = TMPDIR
         cls.devicepath = os.path.join(cls.tmp, 'devices')
         ipad, ipadpro = cls.devices
-        cls.ipad = Device(ipad['UDID'], ipad, 
-                          path=cls.devicepath)
-        cls.ipadpro = Device(ipadpro['UDID'], ipadpro, 
-                             path=cls.devicepath)
-        cls.manager = AppManager('test', path=cls.tmp)
+        cls.ipad = device.Device(ipad['UDID'], ipad, 
+                                 path=cls.devicepath)
+        cls.ipadpro = device.Device(ipadpro['UDID'], ipadpro, 
+                                    path=cls.devicepath)
+
+        class _Resources(object):
+            def __init__(self):
+                self.path = TMPDIR
+                self.logs = os.path.join(TMPDIR, 'logs')
+            def __str__(self):
+                return self.path
+
+        cls.resources = _Resources()
+
+        cls.manager = apps.AppManager('test', cls.resources)
         cls.file = cls.manager.file
         
     @classmethod
@@ -77,7 +91,7 @@ class TestAppManager(BaseTestCase):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.apps = AppManager('base-test', path=self.__class__.tmp)
+        self.apps = apps.AppManager('base-test', self.resources)
         self.file = self.apps.file
 
     def tearDown(self):
@@ -92,12 +106,7 @@ class TestAppManager(BaseTestCase):
         groups = self.apps.groups(self.ipadpro)
         expected = ['all', 'iPadPros', 'all-iPads']
         self.assertItemsEqual(groups, expected)
-        
-    def test_group_with_custom(self):
-        result = self.apps.group('iPadPros')
-        expected = {'apps':[], 'members':{'model':['iPad7,3']}}
-        self.assertTrue(result == expected)
-    
+            
     def test_add_apps_to_missing_group(self):
         self.apps.add('custom', ['test', 'test2', 'test3', 'test'])
         result = self.apps.config.read()['custom']
@@ -131,26 +140,16 @@ class TestAppManager(BaseTestCase):
         with self.assertRaises(AttributeError):
             self.apps.groups({})
 
-    def test_remove_apps(self):
-        raise NotImplementedError()
-
-    def test_remove_empty(self):
-        raise NotImplementedError()
-
-    def test_remove_no_group(self):
-        raise NotImplementedError()
-
-    def test_remove_missing_group(self):
-        raise NotImplementedError()
-
-    def test_remove_non_list(self):
-        raise NotImplementedError()
-
-    def test_remove_empty_list(self):
-        raise NotImplementedError()
-
-    def test_remove_all_apps(self):
-        raise NotImplementedError()
+class TestRemoveApps(BaseTestCase):
+    """
+    test__empty()
+    test_no_group()
+    test_missing_group()
+    test_missing_list()
+    test_empty_list()
+    tests_remove_all()
+    """
+    pass
 
 
 class TestAppManagerList(BaseTestCase):
@@ -200,23 +199,6 @@ class TestAppManagerList(BaseTestCase):
         self.assertItemsEqual(expected, result)
 
 
-class TestAppManagerUnknown(BaseTestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        super(cls, cls).setUpClass()
-        cls.manager.add('all', ['Slack', 'PowerPoint', 'Word'])
-        cls.manager.add('all-iPads', ['Box Sync', 'Excel'])
-        cls.manager.add('iPads', ['Something Lite'])
-        cls.manager.add('iPadPros', ['Something Pro', 'Final Cut Pro'])
-
-    def test_unknown_apps_for_ipadpro(self):
-        installed = self.apps.list(self.ipadpro) + ['New App']
-        expected = ['New App']
-        result = self.apps.unknown(self.ipadpro, installed)
-        self.assertItemsEqual(result, expected)
-
-
 class TestAppManagerBreakdown(BaseTestCase):
 
     @classmethod
@@ -244,4 +226,7 @@ class TestAppManagerBreakdown(BaseTestCase):
 
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    fmt = ('%(asctime)s %(process)d: %(levelname)6s: '
+           '%(name)s - %(funcName)s(): %(message)s')
+    # logging.basicConfig(format=fmt, level=logging.DEBUG)
+    unittest.main(verbosity=1)

@@ -5,6 +5,20 @@ import logging
 import fcntl
 import threading
 import time
+import xml
+
+"""
+Persistant Configuration
+"""
+
+__author__ = 'Sam Forester'
+__email__ = 'sam.forester@utah.edu'
+__copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
+__license__ = 'MIT'
+__version__ = "1.3.0"
+
+# suppress "No handlers could be found" message
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     'Manager', 
@@ -21,9 +35,14 @@ class ConfigError(Error):
     pass
 
 
+class Missing(Error):
+    pass
+
+
 class TimeoutError(Error):
-    '''Raised when lock could not be acquired before timeout
-    '''
+    """
+    Raised when lock could not be acquired before timeout
+    """
     def __init__(self, lockfile):
         self.file = lockfile
 
@@ -32,14 +51,15 @@ class TimeoutError(Error):
 
 
 class ReturnProxy(object):
-    '''Wrap the lock to make sure __enter__ is not called twice
+    """
+    Wrap the lock to make sure __enter__ is not called twice
     when entering the with statement.
     
     If we would simply return *self*, the lock would be acquired
     again in the *__enter__* method of the BaseFileLock, 
     but not released again automatically.
     (Not sure if this is pertinant, but it definitely breaks without it)
-    '''
+    """
     def __init__(self, lock):
         self.lock = lock
     def __enter__(self):
@@ -49,10 +69,11 @@ class ReturnProxy(object):
 
 
 class FileLock(object):
-    '''Unix filelocking 
+    """
+    Unix filelocking 
     Adapted from py-filelock, by Benedikt Schmitt
     https://github.com/benediktschmitt/py-filelock
-    '''
+    """
     def __init__(self, file, timeout=-1):
         self._file = file
         self._fd = None
@@ -62,33 +83,38 @@ class FileLock(object):
 
     @property
     def file(self):
-        '''Return lockfile path
-        '''
+        """
+        :returns: lockfile path
+        """
         return self._file
 
     @property
     def timeout(self):
-        '''Return the value (in seconds) of the timeout
-        '''
+        """
+        :returns: value (in seconds) of the timeout
+        """
         return self._timeout
 
     @timeout.setter
     def timeout(self, value):
-        '''Seconds to wait before raising TimeoutError()
+        """
+        Seconds to wait before raising TimeoutError()
         a negative timeout will disable the timeout
         a timeout of 0 will allow for one attempt acquire the lock
-        '''        
+        """        
         self._timeout = float(value)
 
     @property
     def locked(self):
-        '''True, if the object holds the file lock
-        '''
+        """
+        :returns: True, if the object holds the file lock, else False
+        """
         return self._fd is not None
     
     def _acquire(self):
-        '''Unix based locking using fcntl.flock(LOCK_EX | LOCK_NB)
-        '''
+        """
+        Unix based locking using fcntl.flock(LOCK_EX | LOCK_NB)
+        """
         flags = os.O_RDWR | os.O_CREAT | os.O_TRUNC
         fd = os.open(self._file, flags, 0644)
         try:
@@ -98,8 +124,9 @@ class FileLock(object):
             os.close(fd)
 
     def _release(self):
-        '''Unix based unlocking using fcntl.flock(LOCK_UN)
-        '''
+        """
+        Unix based unlocking using fcntl.flock(LOCK_UN)
+        """
         fcntl.flock(self._fd, fcntl.LOCK_UN)
         os.close(self._fd)
         self._fd = None
@@ -130,7 +157,8 @@ class FileLock(object):
         return ReturnProxy(lock=self)
 
     def release(self, force=False):
-        '''Release the lock.
+        """
+        Release the lock.
 
         Note, that the lock is only completly released, if the 
         lock counter is 0
@@ -140,7 +168,7 @@ class FileLock(object):
         :arg bool force:
             If true, the lock counter is ignored and the lock is 
             released in every case.
-        '''
+        """
         with self._thread_lock:
             if self.locked:
                 self._counter -= 1
@@ -159,7 +187,8 @@ class FileLock(object):
 
 
 class Manager(object):
-    '''This class is meant to allow scripts to read and serialize 
+    """
+    This class is meant to allow scripts to read and serialize 
     configuration files.
 
     The configuration files themselves are modified via filelocking to 
@@ -184,13 +213,14 @@ class Manager(object):
         /user/specified/directory (path specified at instantiation)
         /Library/Management/Configuration
         ~/Library/Management/Configuration
-    '''
+    """
     TMP = '/tmp/config'
     
     def __init__(self, id, path=None, logger=None, **kwargs):
-        '''Setup the configuration manager. Checks to make sure a 
+        """
+        Setup the configuration manager. Checks to make sure a 
         configuration directory exists (creates directory if not)
-        '''
+        """
         if not logger:
             logger = logging.getLogger(__name__)
             logger.addHandler(logging.NullHandler())
@@ -224,20 +254,25 @@ class Manager(object):
 
 
     def write(self, data):
-        '''Serializes specified settings to file
-        '''
+        """
+        Serializes specified settings to file
+        """
         with self.lock.acquire():
             plistlib.writePlist(data, self.file)
-                
-    def read(self):
-        '''Returns Python data structure as read from disk
-        raises ConfigError if unable to read
-        '''
-        if not os.path.exists(self.file):
-            raise ConfigError("file missing: {0}".format(self.file))
 
-        with self.lock.acquire():
-            return plistlib.readPlist(self.file)
+    def read(self):
+        """
+        :returns: data structure (list|dict) as read from disk
+        :raises: ConfigError if unable to read
+        """
+        if not os.path.exists(self.file):
+            raise Missing("file missing: {0}".format(self.file))
+
+        try:
+            with self.lock.acquire():
+                return plistlib.readPlist(self.file)
+        except xml.parsers.expat.ExpatError:
+            raise ConfigError("corrupted plist: {0}".format(self.file))
 
     # TYPE SPECIFIC FUNCTIONS
     def get(self, key, default=None):
@@ -246,8 +281,9 @@ class Manager(object):
             return data.get(key, default)
     
     def update(self, value):
-        '''read data from file, update data, and write back to file
-        '''
+        """
+        read data from file, update data, and write back to file
+        """
         with self.lock.acquire():        
             data = self.read()
             data.update(value)
@@ -255,8 +291,9 @@ class Manager(object):
             return data
 
     def delete(self, key):
-        '''read data from file, update data, and write back to file
-        '''
+        """
+        read data from file, update data, and write back to file
+        """
         with self.lock.acquire():        
             data = self.read()
             v = data.pop(key)
@@ -264,9 +301,10 @@ class Manager(object):
             return v
 
     def deletekeys(self, keys):
-        '''remove specified keys from file (if they exist)
+        """
+        remove specified keys from file (if they exist)
         returns old values as dictionary
-        '''
+        """
         with self.lock.acquire():        
             data = self.read()
             _old = {}
@@ -280,10 +318,11 @@ class Manager(object):
             
     # EXPERIMENTAL
     def reset(self, key, value):
-        '''this is poor design, but I'm going to leave it for now
+        """
+        this is poor design, but I'm going to leave it for now
         overwrites existing key with value
         returns previous value
-        '''
+        """
         with self.lock.acquire():        
             data = self.read()
             previous = data[key]
@@ -340,9 +379,10 @@ class Manager(object):
 
 
 def check_and_create_directories(dirs, mode=0755):
-    '''checks list of directories to see what would be a suitable place
+    """
+    checks list of directories to see what would be a suitable place
     to write the configuration file
-    '''
+    """
     for path in dirs:
         try:
             os.makedirs(path, mode)
@@ -354,10 +394,7 @@ def check_and_create_directories(dirs, mode=0755):
     ## exhausted all options
     raise ConfigError("no suitable directory was found for config")
     
-## MAIN ##
-def main():
-    return 0
 
 if __name__ == '__main__':
-    main()
+    pass
 
