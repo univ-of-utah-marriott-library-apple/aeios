@@ -46,26 +46,10 @@ class BaseTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.data = DATA
         cls.version = OS
-
-        is_subclass = cls is not BaseTestCase
-        has_setup = cls.setUp is not BaseTestCase.setUp
-        if is_subclass and has_setup:
-            orig = cls.setUp
-            def override(self, *args, **kwargs):
-                BaseTestCase.setUp(self)
-                return orig(self, *args, **kwargs)
-            cls.setUp = override
         
     @classmethod
     def tearDownClass(cls):
-        is_subclass = cls is not BaseTestCase
-        has_teardown = cls.tearDown is not BaseTestCase.tearDown
-        if is_subclass and has_teardown:
-            orig = cls.tearDown
-            def override(self, *args, **kwargs):
-                BaseTestCase.tearDown(self)
-                return orig(self, *args, **kwargs)
-            cls.tearDown = override
+        pass
         
     def setUp(self):
         self.data = self.__class__.data
@@ -79,6 +63,7 @@ class BaseTestCase(unittest.TestCase):
 class MockOutputTestCase(BaseTestCase):
 
     def setUp(self):
+        BaseTestCase.setUp(self)
         self.assetutil = tethering.assetcachetetheratorutil
         if self.ver.startswith('10.12'):
             self.static_tetherator = tethering._old_tetherator
@@ -87,6 +72,7 @@ class MockOutputTestCase(BaseTestCase):
         tethering.assetcachetetheratorutil = self.mockassetutil
 
     def tearDown(self):
+        BaseTestCase.tearDown(self)
         tethering.assetcachetetheratorutil = self.assetutil
 
     def lines(self, file):
@@ -137,8 +123,8 @@ class MockOutputTestCase(BaseTestCase):
 class TestSierraParser(MockOutputTestCase):
 
     def setUp(self):
-        self.ver = '10.12'
         MockOutputTestCase.setUp(self)
+        self.ver = '10.12'
 
     def test_empty(self):
         _, out = self.mockassetutil('status', _mock=(0, 'empty'))
@@ -185,8 +171,8 @@ class TestSierraParser(MockOutputTestCase):
 class TestTetherator(MockOutputTestCase):
     
     def setUp(self):
-        self.ver = '10.13'
         MockOutputTestCase.setUp(self)
+        self.ver = '10.13'
     
     def test_dynamic_function_mapped(self):
         args = ['status']
