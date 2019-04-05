@@ -109,10 +109,10 @@ class MockOutputTestCase(BaseTestCase):
         out = None
         if name:
             filename = '{0}.txt'.format(name)
-            if self.ver.startswith('10.12'):
-                file = os.path.join(self.data, '10.12', filename)
-            else:
-                file = os.path.join(self.data, filename)
+            version, filename = os.path.split(filename)
+            if not version and self.version.startswith('10.12'):
+                version = '10.12'
+            file = os.path.join(self.data, version, filename)
             # instead of running command, read output from file
             with open(file, 'r') as f:
                 out = f.read()
@@ -122,24 +122,20 @@ class MockOutputTestCase(BaseTestCase):
 
 class TestSierraParser(MockOutputTestCase):
 
-    def setUp(self):
-        MockOutputTestCase.setUp(self)
-        self.ver = '10.12'
-
     def test_empty(self):
-        _, out = self.mockassetutil('status', _mock=(0, 'empty'))
+        _, out = self.mockassetutil('status', _mock=(0, '10.12/empty'))
         result = tethering._parse_tetherator_status(out)
         expected = {}
         self.assertItemsEqual(expected, result)
 
     def test_disabled(self):
-        _, out = self.mockassetutil('status', _mock=(0, 'disabled'))
+        _, out = self.mockassetutil('status', _mock=(0, '10.12/disabled'))
         result = tethering._parse_tetherator_status(out)
         expected = {}
         self.assertItemsEqual(expected, result)
 
     def test_standard(self):
-        _, out = self.mockassetutil('status', _mock=(0, 'status'))
+        _, out = self.mockassetutil('status', _mock=(0, '10.12/status'))
         result = tethering._parse_tetherator_status(out)
         expected = [{'Checked In': True, 
                      'Check In Pending': False, 
@@ -169,10 +165,6 @@ class TestSierraParser(MockOutputTestCase):
 
 
 class TestTetherator(MockOutputTestCase):
-    
-    def setUp(self):
-        MockOutputTestCase.setUp(self)
-        self.ver = '10.13'
     
     def test_dynamic_function_mapped(self):
         args = ['status']
@@ -239,6 +231,9 @@ class TestTetherator(MockOutputTestCase):
 
 
 class TestDevices(MockOutputTestCase):
+
+    def setUp(self):
+        MockOutputTestCase.setUp(self)
 
     def test_no_devices(self):
         tethering.ENABLED = True
