@@ -29,7 +29,7 @@ def setUpModule():
     create tmp directory
     """
     try:
-        os.mkdir(TMPDIR)
+        os.makedirs(TMPDIR)
     except OSError as e:
         if e.errno != 17:
             raise

@@ -77,7 +77,12 @@ class Defaults(object):
     
     @property
     def apps(self):
-        return {}
+        return {'groups': {'model': {'iPad7,3': ['iPadPros'],
+                                    'iPad8,1': ['iPadPros'],
+                                    'iPad7,5': ['iPads']}},
+               'all-iPads': [],
+               'iPadPros': [],
+               'iPads': []}
     
     @property
     def aeios(self):
@@ -150,10 +155,12 @@ class Resources(object):
         """
         self.log = logging.getLogger(__name__ + '.Resources')
         self.path = path if path else PATH
-        self.domain = "{0}.{1}".format(DOMAIN, name)
-        self.log.debug("building config: %r: %r", self.domain, path)
         if name:
+            self.domain = "{0}.{1}".format(DOMAIN, name)
+            self.log.debug("building config: %r: %r", self.domain, path)
             self.config = _config(self.domain, path)
+        else:
+            self.domain = DOMAIN
         self.preferences = _config('edu.utah.mlib.aeios', PREFERENCES)
         self.auth = None
 
@@ -226,6 +233,9 @@ class Resources(object):
         if not info:
             raise MissingConfiguration("No configuration for Reporting")
         return info
+    
+    def __str__(self):
+        return self.path
 
 
 def build_directories(root, names, mode=0o755):
@@ -250,7 +260,9 @@ def _config(domain, path=None, defaults=None):
     if not path:
         path = PATH
     if not defaults:
+        logger.debug("looking for defaults: %r", domain)
         defaults = DEFAULT.find(domain)
+        logger.debug("found defaults: %r", defaults)
         
     # TO-DO: this should really support default variables
     # conf = config.Manager(domain, path, defaults)
@@ -274,7 +286,6 @@ def configure(key, data):
     #                                   'channel': channel, 
     #                                   'name': name}})
     pass
-
 
 
 if __name__ == '__main__':

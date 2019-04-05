@@ -110,7 +110,7 @@ class MockOutputTestCase(BaseTestCase):
 
         return _mock
 
-    def mockassetutil(self, arg, json=False, _mock=(1,None)):
+    def mockassetutil(self, arg, json=False, _mock=(1, None)):
         """
         replaces tethering.assetcachetetheratorutil() to mock data that 
         would be returned
@@ -135,6 +135,10 @@ class MockOutputTestCase(BaseTestCase):
       
 
 class TestSierraParser(MockOutputTestCase):
+
+    def setUp(self):
+        self.ver = '10.12'
+        MockOutputTestCase.setUp(self)
 
     def test_empty(self):
         _, out = self.mockassetutil('status', _mock=(0, 'empty'))
@@ -179,6 +183,10 @@ class TestSierraParser(MockOutputTestCase):
 
 
 class TestTetherator(MockOutputTestCase):
+    
+    def setUp(self):
+        self.ver = '10.13'
+        MockOutputTestCase.setUp(self)
     
     def test_dynamic_function_mapped(self):
         args = ['status']
@@ -325,7 +333,7 @@ class TestDevices(MockOutputTestCase):
 
     def test_devices_are_not_tethered_single(self):
         tethering.ENABLED = True
-        m = (0,'status')
+        m = (0, 'status')
         tethered = tethering.devices_are_tethered(['DMPWAA01JF8J'], _mock=m)
         self.assertFalse(tethered)
 
@@ -524,9 +532,5 @@ if __name__ == '__main__':
     if '--extended' in sys.argv:
         _extended = extended_tests(loader)
         suites = unittest.TestSuite([generic, dynamic, _extended])
-
-    fmt = ('%(asctime)s %(process)d: %(levelname)6s: '
-           '%(name)s - %(funcName)s(): %(message)s')
-    # logging.basicConfig(format=fmt, level=logging.DEBUG)
 
     unittest.TextTestRunner(verbosity=1).run(suites)

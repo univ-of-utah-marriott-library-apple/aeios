@@ -15,6 +15,8 @@ from tasklist import TaskList
 from device import Device, DeviceList, DeviceError
 from actools import cfgutil
 
+import resources
+
 """
 Manage and Automate iOS devices
 """
@@ -23,7 +25,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.7.0"
+__version__ = "2.7.1"
 __all__ = ['DeviceManager', 'Stopped']
 
 # suppress "No handlers could be found" message
@@ -52,7 +54,7 @@ class Cache(object):
         self.log = logging.getLogger(__name__ + '.Cache')
         self.devices = DeviceList()
         self.conf = conf
-                
+
     @property
     def listed(self):
         return self.conf.get('Devices', [])
@@ -60,13 +62,13 @@ class Cache(object):
     @listed.setter
     def listed(self, value):
         self.conf.update({'Devices': value})
-    
+
     def device(self, ecid):
         for d in self.devices:
             if ecid == d.ecid:
                 return d
         raise CacheError("{0!s}: not in cache".format(ecid))
-        
+
     def add(self, device):
         if device not in self.devices:
             self.log.debug("cached device: %s", device)
@@ -77,30 +79,31 @@ class Resources(object):
 
     def __init__(self, root, directories):
         self.path = root
+        self.domain = 'edu.utah.mlib.'
         for d in directories:
             path = os.path.join(root, d)
             setattr(self, d.lower(), path)
             if not os.path.isdir(path):
                 os.mkdir(path)
-    
+
     def __str__(self):
         return self.path
 
-   
+
 class DeviceManager(object):
     """
     Manage and automate iOS Devices
     """
     def __init__(self, _id='edu.utah.mlib.ipad', logger=None, **kwargs):
         self.log = logger if logger else logging.getLogger(__name__)
-
+        
         self.lock = config.FileLock('/tmp/ipadmanager', timeout=5)
         self.config = config.Manager("{0}.manager".format(_id), **kwargs)
         self.file = self.config.file
-
+        
         # paths to various resources
         resources = os.path.dirname(self.config.file)
-        r = ['Devices', 'Supervision', 'Images', 
+        r = ['Devices', 'Supervision', 'Images',
              'Profiles', 'Logs', 'Apps']
         self.resources = Resources(resources, r)
         self.images = self.resources.images
@@ -116,16 +119,16 @@ class DeviceManager(object):
                                'Idle': 300})
         self.cache = Cache(self.config)
         self.task = TaskList(_id, path=str(self.resources))
-        self.apps = apps.AppManager(_id, self.resources)
-
+        self.apps = apps.AppManager('apps')
+        
         _reporting = self.config.get('Reporting', {'Slack': {}})
         self.log.debug("reporting: %r", _reporting)
         self.reporter = reporting.reporterFromSettings(_reporting) 
-
+        
         self.idle = self.config.setdefault('Idle', 300)
-
+        
         cfgutil.log = os.path.join(self.resources.logs, 'cfgexec.log')  
-
+        
         self.auth = None
         self._install_local_apps = False
 
@@ -143,7 +146,7 @@ class DeviceManager(object):
     @property
     def stopped(self):
         return self.config.get('Stopped', False)
-    
+
     @stopped.setter
     def stopped(self, value):
         self.config.update({'Stopped': value})
@@ -192,7 +195,7 @@ class DeviceManager(object):
         if not self.auth:
             self.log.debug("getting authorization for cfgutil")
             directory = self.resources.supervision
-        
+            
             if not os.path.isdir(directory):
                 err = "no such directory: {0!r}".format(directory)
                 raise Error(err)
@@ -214,7 +217,7 @@ class DeviceManager(object):
             e.g. [(ECID1, path), (ECID2, path), ...]
         """
         # list all files in directory (excluding hidden files)
-        files = [x for x in os.listdir(self.resources.devices) 
+        files = [x for x in os.listdir(self.resources.devices)
                  if not x.startswith('.')]
         _records = []
         ecids = ecids or []
@@ -239,8 +242,8 @@ class DeviceManager(object):
             if ecid not in exclude:
                 if not ecids or ecid in ecids:
                     devices.append(self.device(ecid))
-        return devices            
-    
+        return devices
+
     def available(self):
         """
         :returns: DeviceList of currently connected devices
@@ -256,7 +259,7 @@ class DeviceManager(object):
 
     def device(self, ecid, info=None):
         """
-        :returns: Device object        
+        :returns: Device object
         """
         try:
             # return cached device object (if we have one)
@@ -279,13 +282,13 @@ class DeviceManager(object):
 
         self.cache.add(device)
         return device
-                           
+
     def devices(self, ecids):
         return DeviceList([self.device(x) for x in ecids])
 
-    def list(self, refresh=False, timeout=30):        
+    def list(self, refresh=False, timeout=30):
         """
-        :returns: list of connected devices using cfgutil.list() 
+        :returns: list of connected devices using cfgutil.list()
 
         NOTE: cached and refreshed once every 30 seconds
         """
@@ -365,9 +368,9 @@ class DeviceManager(object):
             # create dummy checkout 1 minute before checkin
             device.checkout = device.checkin -  dt.timedelta(minutes=1)
         
-        return False        
+        return False
 
-    def check_network(self, devices, tethered=True):    
+    def check_network(self, devices, tethered=True):
         # TO-DO: this needs to be tested to see that if tethering fails
         #        a wi-fi profile is used instead
         _use_tethering = tethered
@@ -395,7 +398,7 @@ class DeviceManager(object):
                 if dt.datetime.now() > timeout:
                     self.log.error("timed out waiting for devices")
                     break
-                
+
             if not tethered:
                 tethering.restart(timeout=10)
         else:
@@ -422,8 +425,8 @@ class DeviceManager(object):
         # TO-DO:
         # validate checkin (currently done by need_to_erase())
         # - invalid:
-        #       unmanaged, restarting, 
-                
+        #       unmanaged, restarting,
+        
         if not self.managed(device):
             # TO-DO: add mechanism to prompt for device management
             self.log.info("ignoring unmanaged device: %s", device)
@@ -432,7 +435,7 @@ class DeviceManager(object):
             self.log.debug("%s: managed", device)
         
         if self.stopped:
-            # mechanism to stall while devices restart            
+            # mechanism to stall while devices restart
             self.waitfor(device, 'restart')
             if device.restarting:
                 device.restarting = False
@@ -445,7 +448,7 @@ class DeviceManager(object):
         else:
             self.log.debug("%s: will not be erased", device)
         
-        # at this point all checks have been made and 
+        # at this point all checks have been made and
         device.checkin = dt.datetime.now()
         
         if run:
@@ -462,13 +465,13 @@ class DeviceManager(object):
         device = self.device(info['ECID'], info)
         _cache = [d for d in self.cache.listed if d['ECID'] != device.ecid]
         self.cache.listed = _cache
-        # IDEA: could just return if self.stopped (would eliminate need 
+        # IDEA: could just return if self.stopped (would eliminate need
         #       for device restart tracking)
 
         # skip checkout if device has been marked for restart
         if not device.restarting:
             device.checkout = dt.datetime.now()
-            self.log.info("%s: checked out", device)            
+            self.log.info("%s: checked out", device)
         else:
             self.log.debug("%s: restarting...", device)
 
@@ -500,7 +503,7 @@ class DeviceManager(object):
         lock = config.FileLock(lockfile)
         with lock.acquire(timeout=-1):
             waiting = self.task.list(reason)
-            if not waiting:                
+            if not waiting:
                 if self.stopped and self.config.get(_reason):
                     self.stopped = False
                     self.config.delete(_reason)
@@ -514,7 +517,7 @@ class DeviceManager(object):
                 waiting = self.task.list(reason)
                 if dt.datetime.now() > stoptime:
                     self.log.debug("gave up waiting")
-                    break                            
+                    break
             self.stopped = False
             self.config.delete(_reason)
 
@@ -530,7 +533,7 @@ class DeviceManager(object):
         available = self.available().ecids
         # Temporary cache of existing queries
         _cache, ecidset = {}, set()
-        # merge all of the queries into one 
+        # merge all of the queries into one
         for q in self.task.queries():
             # empty the query of all ECIDs (preserved in _cache)
             ecids = self.task.query(q, only=available)
@@ -613,7 +616,7 @@ class DeviceManager(object):
 
     def erase(self, targets):
         """
-        Erase devices and task for supervision and App installation 
+        Erase devices and task for supervision and App installation
         
         :param DeviceList targets:  devices to erase
         :returns: None
@@ -634,7 +637,7 @@ class DeviceManager(object):
         
         erased = []
         failed = []
-        try: 
+        try:
             self.verified = False
             self.log.info("erasing devices: %s", tasked)
             result = cfgutil.erase(tasked.ecids, self.authorization())
@@ -708,7 +711,7 @@ class DeviceManager(object):
 
         # only continue with unsupervised devices
         unsupervised = targets.unsupervised
-        tasked_ecids = self.task.prepare(only=unsupervised.ecids)                
+        tasked_ecids = self.task.prepare(only=unsupervised.ecids)
 
         if not tasked_ecids:
             self.log.info("no devices need to be supervised")
@@ -787,7 +790,7 @@ class DeviceManager(object):
         self.task.add('restart', devices.ecids)
         for device in devices:
             device.restarting = True
-        cfgutil.restart(devices.ecids, self.authorization())        
+        cfgutil.restart(devices.ecids, self.authorization())
         self.stop(reason='restart')
 
     def shutdown(self, devices):
@@ -831,7 +834,7 @@ class DeviceManager(object):
             alert = e.alert
             # TO-DO: skip app verification
             details = u"{0}: {1!r} ({2!r})".format(alert.details,
-                                                  alert.choices, 
+                                                  alert.choices,
                                                   alert.options)
             self.reporter.send(u"{0!s}".format(details))
             raise
@@ -840,7 +843,7 @@ class DeviceManager(object):
         """
         Set device wallpaper
 
-        :param DeviceList targets:  devices to modify wallpaper 
+        :param DeviceList targets:  devices to modify wallpaper
         :param string _type:        name of image to use
 
         :returns: None
@@ -900,7 +903,7 @@ class DeviceManager(object):
         Shutdown verified devices
         
         NOTE:
-            meant to balance the number of devices to mitigate odd behavior 
+            meant to balance the number of devices to mitigate odd behavior
             when the USB bus is overloaded (typically around 10 devices)
         """
         # wishlist
@@ -936,11 +939,11 @@ class DeviceManager(object):
         return _verified
 
     @verified.setter
-    def verified(self, value):        
+    def verified(self, value):
         if not isinstance(value, bool):
             raise TypeError("{0}: not boolean".format(value))
         _data = {'verified': value}
-        if value: 
+        if value:
             _data['verification'] = dt.datetime.now()
         self.config.update(_data)
     
@@ -951,10 +954,10 @@ class DeviceManager(object):
         >>>     # do something
         
         NOTE: I would like to change this in the future, but should work
-              relatively well for now 
+              relatively well for now
         """
         self.log.debug("running significant verification")
-                    
+        
         # get all available devices
         available = self.available()
         # Re-query supervision and apps on all available devices
@@ -1008,7 +1011,7 @@ class DeviceManager(object):
             else:
                 self.log.debug("%s: supervision verified!", device)
             self.log.debug("%s: verified == %s", device, _verified)
-            device.verified = _verified         
+            device.verified = _verified
 
         # App Verification
         missing_apps = []
@@ -1022,7 +1025,7 @@ class DeviceManager(object):
             self.log.error("unable to verify apps: %s", e)
             self.reporter.send(e)
             # re-check verification, but don't re-task app installation
-            missing_apps = self.apps.verify(app_check, force=True)    
+            missing_apps = self.apps.verify(app_check, force=True)
         finally:
             for d in missing_apps:
                 d.verified = False
@@ -1161,7 +1164,7 @@ class DeviceManager(object):
                 except cfgutil.Error as e:
                     self.log.error("wallpaper failed: %r: %s", image, e)
         
-        # update finishing timestamp            
+        # update finishing timestamp
         self.config.update({'finished': dt.datetime.now()})
         self.log.debug("finalization complete")
       

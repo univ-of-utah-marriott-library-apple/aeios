@@ -73,6 +73,7 @@ def _parse_tetherator_status(status):
     (Deprecated in 10.13+)    
     """
     logger = logging.getLogger(__name__)
+    logger.debug("parsing: %r", status)
     # remove newlines and extra whitespace from status
     stripped = re.sub(r'\n|\s{4}', '', status)
 

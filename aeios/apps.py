@@ -5,10 +5,13 @@ import os
 import logging
 import datetime as dt
 
+from distutils import version
+
 import config
+from . import resources
+
 from device import DeviceList
 from actools import adapter, cfgutil
-from distutils import version
 
 """
 Manage Apps for iOS devices
@@ -239,6 +242,7 @@ class AlertManager(object):
 
 class AppManager(object):
     
+    #TO-DO: remove 
     default = {'groups': {'model': {'iPad7,3': ['iPadPros'],
                                     'iPad8,1': ['iPadPros'],
                                     'iPad7,5': ['iPads']}},
@@ -247,35 +251,41 @@ class AppManager(object):
                'iPadPros': [],
                'iPads': []}
                      
-    def __init__(self, _id, resources):
-        # needs the manager to ask for installed apps
-        # or the list of installed apps needs to be provided <--
+    # def __init__(self, domain|name, resources=None):
+    # def __init__(self, _id, resource=None):
+    def __init__(self, name=None, resource=None):
         self.log = logging.getLogger(__name__)
 
-        self.resources = resources
-        a_id = "{0}.apps".format(_id)
-        path = str(self.resources)
-        self.config = config.Manager(a_id, path=path)
+        if not resource:
+            resource = resources.Resources(__name__)
+        self.resources = resource
+
+        domain = self.resources.domain
+        path = self.resources.path
+        self.config = self.resources.config
         self.file = self.config.file
-        self.errors = AlertManager(a_id, resources)
-        # read global App configuration (if any)
+        self.errors = AlertManager(domain, resource)
+        #TO-DO:
+        # - merge global config (fix overwrite)
+        #     * current overwrites
+        # - leverage `resources.DEFAULT.apps`
         _apps = self.__class__.default
         try:
+            # read global App configuration (if any)
             g_path = path.replace(os.path.expanduser('~'), '')
-            g_config = config.Manager(a_id, path=g_path)
+            g_config = config.Manager(domain, path=g_path)
             # repopulate defaults with settings from global config
             _apps = g_config.read()
             # overwrite existing apps with global configuration
             self.config.write(_apps)
-        except config.Error:
+        except config.ConfigError:
             self.log.debug("no global configuration for apps")
-            pass
 
         try:
             # TO-DO: merge from /Library
             self._record = self.config.read()
             self.log.debug("found configuration: %s", self.file)
-        except config.Error as e:
+        except config.Missing as e:
             self.log.error("unable to read config: %s", e)
             self.log.info("creating new config from default")
             self.log.debug("writing config: %r", _apps)
@@ -306,14 +316,20 @@ class AppManager(object):
         if device is not None:
             # strip device type from model identifier ('iPad7,5' -> 'iPad')
             model_type = re.match(r'^(\w+?)\d+,\d+$', device.model).group(1)
-            groupnames = ['all', "all-{0!s}s".format(model_type)]
+            groupnames = ["all-{0!s}s".format(model_type)]
             groupset = set(groupnames)
             # model-only support for now
-            _membership = self._record['groups']['model'][device.model]
-            groupset.update(_membership)
+            try:
+                _membership = self._record['groups']['model'][device.model]
+                self.log.debug("_membership: %r", _membership)
+                groupset.update(_membership)
+            except KeyError:
+                pass
+            self.log.debug("groupset: %r", groupset)
             return list(groupset)
-        _excluded = ['groups', 'Identifiers', 'errors']
-        return [x for x in self._record.keys() if x not in _excluded]
+        else:
+            _excluded = ['groups', 'Identifiers', 'errors']
+            return [x for x in self._record.keys() if x not in _excluded]
         
     def list(self, device=None, exclude=()):
         """
@@ -356,6 +372,7 @@ class AppManager(object):
         Mechanism for adding apps to a group
         """
         _apps = self.config.get(group)
+        self.log.debug("adding apps: %r: %r", group, _apps)
         if not _apps:
             appset = set(apps)
             self.config.update({group: list(appset)})
@@ -392,7 +409,7 @@ class AppManager(object):
         else:
             appset = set(appnames)
         appset.difference_update(self.list())
-        return AppList([x for x in applist if x.name in appset])            
+        return AppList([x for x in applist if x.name in appset])
 
     # TO-DO: fix/remove this
     def breakdown(self, devices):
@@ -405,11 +422,11 @@ class AppManager(object):
             the second instruction set is only returned if iPad Pros 
             (iPad7,3) are included in the device list 
         """
-        _all = self._record['all']
+        # _all = self._record['all']
         _ipads = self._record['all-iPads']
 
         # create a list of all unique apps for all iPads
-        _breakdown = [(devices, list(set(_all).union(_ipads)))]
+        _breakdown = [(devices, list(set( _ipads)))]
 
         if self._record['iPads']:
             ipads = [x for x in devices if x.model == 'iPad7,5']
