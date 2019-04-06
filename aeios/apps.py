@@ -21,7 +21,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.3.0"
+__version__ = "2.4.0"
 __all__ = ['App',
            'AppError',
            'AppList',
@@ -241,18 +241,7 @@ class AlertManager(object):
     
 
 class AppManager(object):
-    
-    #TO-DO: remove 
-    default = {'groups': {'model': {'iPad7,3': ['iPadPros'],
-                                    'iPad8,1': ['iPadPros'],
-                                    'iPad7,5': ['iPads']}},
-               'all': [],
-               'all-iPads': [],
-               'iPadPros': [],
-               'iPads': []}
-                     
-    # def __init__(self, domain|name, resources=None):
-    # def __init__(self, _id, resource=None):
+                         
     def __init__(self, name=None, resource=None):
         self.log = logging.getLogger(__name__)
 
@@ -269,7 +258,7 @@ class AppManager(object):
         # - merge global config (fix overwrite)
         #     * current overwrites
         # - leverage `resources.DEFAULT.apps`
-        _apps = self.__class__.default
+        _apps = resources.DEFAULT.apps
         try:
             # read global App configuration (if any)
             g_path = path.replace(os.path.expanduser('~'), '')
@@ -369,35 +358,52 @@ class AppManager(object):
 
     def add(self, group, apps):
         """
-        Mechanism for adding apps to a group
-        """
-        _apps = self.config.get(group)
-        self.log.debug("adding apps: %r: %r", group, _apps)
-        if not _apps:
-            appset = set(apps)
-            self.config.update({group: list(appset)})
-        else:
-            # update existing group apps (excluding duplicates)
-            appset = set(_apps + apps)
-            self.config.update({group: list(appset)})
-        self._record = self.config.read()
-        return list(appset)
+        add app to a group
 
-    def remove(self, group, apps):
+        :returns: list of apps currently in group
         """
-        Remove apps from specified group
+        if isinstance(apps, (str, unicode)):
+            # not pythonic, but better than adding each chr of the string
+            apps = (apps,)
 
-        :returns: list of apps in group (after removal)
-        """
-        _apps = self.config.get(group)
-        if not _apps:
-            return []
+        current = self.config.get(group, [])
+        if apps:
+            self.log.debug(u"adding apps: %r: %r", group, apps)
+            for app in apps:
+                if app not in current:
+                    self.log.info(u"added app: '%s'", app)
+                    current.append(app)
+            self._record[group] = current
+            self.config.update({group: current})
         else:
-            # update existing group apps (excluding duplicates)
-            appset = set(_apps) - set(apps)
-            self.config.update({group: list(appset)})
+            self.log.debug("nothing to add: %r", apps)
+        return current
+
+    def remove(self, apps, groups=None):
+        """
+        remove apps
+        
+        if group is None, app is removed from all groups
+
+        :returns: None
+        """
+        if not apps:
+            self.log.error("nothing was specified for removal")
+            return
+
+        if isinstance(apps, (str, unicode)):
+            # not pythonic, but better than adding each chr of the string
+            apps = (apps,)
+
+        current = self.config.get(group, [])
+        if not groups:
+            groups = self.groups()
+        
+        for group in groups:
+            current = set(self.config.get(group, []))
+            removed = current - set(apps)
+            self.config.update({group: list(removed)})
         self._record = self.config.read()
-        return list(appset)
 
     def unknown(self, device, appnames=None):
         """

@@ -25,7 +25,7 @@ TMPDIR = os.path.join(LOCATION, 'tmp')
 DATA = os.path.join(TMPDIR, 'apps')
 TMP = os.path.join(TMPDIR, 'apps')
 PREFERENCES = os.path.join(TMP, 'Preferences')
-DEBUG = False
+DEBUG = True
 
 def setUpModule():
     """
@@ -202,12 +202,16 @@ class AppManagerTest(BaseTestCase):
         cls.newipad = device.Device(ipadf_n['ECID'], ipadf_n, 
                                      path=cls.resources.devices)
         
-        cls.manager = apps.AppManager('test')
+        cls.manager = apps.AppManager()
     
     def setUp(self):
         BaseTestCase.setUp(self)
         self.resources = resources.Resources('aeios.apps')
         self.apps = self.__class__.manager
+
+    def tearDown(self):
+        BaseTestCase.tearDown(self)
+        os.remove(self.resources.config.file)
     
     def test_resources_exist(self):
         self.assertTrue(os.path.exists(self.apps.config.file))
@@ -281,22 +285,85 @@ class TestRemoveApps(AppManagerTest):
     pass
 
 
-@unittest.skip("blah")
 class TestAddApps(AppManagerTest):
     """
     Tests for adding apps
-
-    test_None()
-    test_remove_app_string()
-    test_remove_app_set()
-    test_remove_app_list()
-    test_remove_app_tuple()
-    test_remove_app_unicode()
-    test_empty_list()
     test_not_in_list()
-    test_no_group()
     """
-    pass
+    def setUp(self):
+        AppManagerTest.setUp(self)
+        logging.getLogger('aeios.apps').setLevel(logging.DEBUG)
+
+    def tearDown(self):
+        AppManagerTest.tearDown(self)
+        logging.getLogger('aeios.apps').setLevel(logging.CRITICAL)
+
+    def test_add_None(self):
+        """
+        test adding None does nothing
+        """
+        expected = []
+        result = self.apps.add('all-iPads', None)
+        self.assertEquals(expected, result)
+
+    def test_None_group(self):
+        """
+        test adding None does nothing
+        """
+        with self.assertRaises(TypeError):
+            result = self.apps.add(None, ['test'])
+
+    def test_add_empty(self):
+        """
+        test adding empty list does nothing
+        """
+        expected = []
+        result = self.apps.add('all-iPads', [])
+        self.assertEquals(expected, result)
+
+    def test_add_string(self):
+        """
+        test single string added
+        """
+        expected = ['test']
+        result = self.apps.add('all-iPads', 'test')
+        self.assertItemsEqual(expected, result)
+
+    def test_add_set(self):
+        """
+        test adding set
+        """
+        expected = ['test', 'test2', 'test3']
+        result = self.apps.add('all-iPads', set(expected))
+        self.assertItemsEqual(expected, result)    
+
+    def test_add_list(self):
+        """
+        test adding list
+        """
+        expected = ['test', 'test2', 'test3']
+        result = self.apps.add('all-iPads', expected)
+        self.assertItemsEqual(expected, result)    
+
+    def test_add_tuple(self):
+        """
+        test adding tuple
+        """
+        expected = ('test', 'test2', 'test3')
+        result = self.apps.add('all-iPads', expected)
+        self.assertItemsEqual(expected, result)    
+
+    def test_add_unicode_app(self):
+        """
+        test adding set of strings
+        """
+        expected = [u'大辞林']
+        result = self.apps.add('all-iPads', expected)
+        self.assertItemsEqual(expected, result)
+        # also verify app was added
+        data = self.apps.config.get('all-iPads')
+        self.assertItemsEqual(expected, data)
+        
 
 
 # @unittest.skip("blah")
@@ -304,23 +371,13 @@ class TestAppManagerList(AppManagerTest):
 
     def setUp(self):
         AppManagerTest.setUp(self)
-        # self.apps.add('all', ['Slack', 'PowerPoint', 'Word'])
-        self.apps.add('all-iPads', ['Box Sync', 'Excel', 'Slack', 'PowerPoint', 'Word'])
+        self.apps.add('all-iPads', 
+                      ['Box Sync', 'Excel', 'Slack', 'PowerPoint', 'Word'])
         self.apps.add('iPads', ['Something Lite'])
         self.apps.add('iPadPros', ['Something Pro', 'Final Cut Pro'])
-        # print(self.apps.config.read())
-        # raise SystemExit()
 
     def tearDown(self):
         AppManagerTest.tearDown(self)
-
-#     @classmethod
-#     def setUpClass(cls):
-#         super(TestAppManagerList, cls).setUpClass()
-#         cls.manager.add('all', ['Slack', 'PowerPoint', 'Word'])
-#         cls.manager.add('all-iPads', ['Box Sync', 'Excel'])
-#         cls.manager.add('iPads', ['Something Lite'])
-#         cls.manager.add('iPadPros', ['Something Pro', 'Final Cut Pro'])
 
     def test_list_all_apps_for_ipadpro(self):
         expected = ['Slack', 'PowerPoint', 'Word','Box Sync', 'Excel', 
@@ -395,6 +452,11 @@ if __name__ == '__main__':
     if DEBUG:
         fmt = ('%(asctime)s %(process)d: %(levelname)6s: '
                '%(name)s - %(funcName)s(): %(message)s')
-        logging.basicConfig(format=fmt, level=logging.DEBUG)
+        logging.basicConfig(format=fmt, level=logging.CRITICAL)
         logging.getLogger('aeios.resources').setLevel(logging.CRITICAL)
     unittest.main(verbosity=1)
+#     loader = unittest.TestLoader()
+#     _tests = unittest.TestSuite(map(TestAddApps, ['test_add_unicode_app']))
+#     suites = unittest.TestSuite([_tests])
+#     unittest.TextTestRunner(verbosity=1).run(suites)
+    
