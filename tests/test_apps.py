@@ -15,7 +15,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright(c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.4"
+__version__ = "1.0.5"
 
 # suppress "No handlers could be found" message
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -226,7 +226,6 @@ class AppManagerTest(BaseTestCase):
     """
     Generic Tests for AppManager
     """
-
     @classmethod
     def setUpClass(cls):
         """
@@ -438,14 +437,7 @@ class TestRemoveApps(AppManagerTest):
 class TestAddApps(AppManagerTest):
     """
     Tests for adding apps
-    test_not_in_list()
     """
-    def setUp(self):
-        AppManagerTest.setUp(self)
-
-    def tearDown(self):
-        AppManagerTest.tearDown(self)
-
     def test_add_None(self):
         """
         test adding None does nothing
@@ -517,8 +509,8 @@ class TestAppManagerList(AppManagerTest):
 
     def setUp(self):
         AppManagerTest.setUp(self)
-        self.manager.add('all-iPads', 
-                      ['Box Sync', 'Excel', 'Slack', 'PowerPoint', 'Word'])
+        self.manager.add('all-iPads', ['Box Sync', 'Excel', 'Slack', 
+                                       'PowerPoint', 'Word'])
         self.manager.add('iPads', ['Something Lite'])
         self.manager.add('iPadPros', ['Something Pro', 'Final Cut Pro'])
 
@@ -571,8 +563,7 @@ class TestAppManagerBreakdown(AppManagerTest):
 
     @classmethod
     def setUpClass(cls):
-        super(cls, cls).setUpClass()
-        # cls.manager.add('all', ['Slack', 'PowerPoint', 'Word'])
+        super(AppManagerTest, cls).setUpClass()
         cls.manager.add('all-iPads', ['Box Sync', 'Excel'])
         cls.manager.add('iPads', ['Something Lite'])
         cls.manager.add('iPadPros', ['Something Pro', 'Final Cut Pro'])
@@ -597,10 +588,4 @@ if __name__ == '__main__':
     fmt = ('%(asctime)s %(process)d: %(levelname)6s: '
            '%(name)s - %(funcName)s(): %(message)s')
     # logging.basicConfig(format=fmt, level=logging.DEBUG)
-    # logging.getLogger('aeios.resources').setLevel(logging.CRITICAL)
     unittest.main(verbosity=1)
-#     loader = unittest.TestLoader()
-#     _tests = unittest.TestSuite(map(TestAddApps, ['test_add_unicode_app']))
-#     suites = unittest.TestSuite([_tests])
-#     unittest.TextTestRunner(verbosity=1).run(suites)
-    
