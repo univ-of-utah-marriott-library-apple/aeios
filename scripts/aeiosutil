@@ -15,7 +15,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 # name of this script
 SCRIPT = os.path.basename(sys.argv[0])
@@ -27,7 +27,7 @@ def add(resources, args):
         logger.info("added wi-fi profile: %s", args.path)
     elif args.item == 'image':
         aeios.utility.add_item(args.path, resources.images, name=args.image)
-            logger.info("added %s image: %s", args.image, args.path)
+        logger.info("added %s image: %s", args.image, args.path)
     elif args.item == 'identity':
         if args.p12:
             aeios.utility.add_p12(args.path, resources.supervision)
