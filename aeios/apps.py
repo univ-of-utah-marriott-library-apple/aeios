@@ -21,7 +21,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.4.0"
+__version__ = "2.4.1"
 __all__ = ['App',
            'AppError',
            'AppList',
@@ -375,8 +375,10 @@ class AppManager(object):
             self.log.debug(u"adding apps: %r: %r", group, apps)
             for app in apps:
                 if app not in current:
-                    self.log.info(u"added app: '%s'", app)
                     current.append(app)
+                    self.log.info(u"added app: '%s'", app)
+                else:
+                    self.log.info(u"already added: '%s'", app)
             self._record[group] = current
             self.config.update({group: current})
         else:

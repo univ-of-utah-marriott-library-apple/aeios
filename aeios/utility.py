@@ -5,19 +5,18 @@ import shutil
 import logging
 import argparse
 import subprocess
-# import datetime as dt
 
-import aeios
+from . import resources
 
 """
-Utility functions for aeiosutil
+Utility functions for aeios
 """
 
 __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.0"
+__version__ = "1.0.2"
 
 # suppress "No handlers could be found" message
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -36,12 +35,12 @@ class Parser(object):
     """
     def __init__(self):
         self.parser = argparse.ArgumentParser(description='configures aeios')
-        parser.add_argument('-v', '--verbose', action='store_true', 
-                            help='be verbose')
-        parser.add_argument('-d', '--debug', action='store_true',
-                            help='be VERY verbose')
-        parser.add_argument('--version', action='store_true', 
-                            help='print version and exit')
+        self.parser.add_argument('-v', '--verbose', action='store_true', 
+                                 help='be verbose')
+        self.parser.add_argument('-d', '--debug', action='store_true',
+                                 help='be VERY verbose')
+        self.parser.add_argument('--version', action='store_true', 
+                                 help='print version and exit')
 
         desc = 'see `%(prog)s COMMAND --help` for more information'
         self.subparsers = self.parser.add_subparsers(title='COMMANDS', 
@@ -239,12 +238,9 @@ def add_item(path, dir, name=None):
 
 def add_wifi_profile(path, dest):
     logger = logging.getLogger(__name__)
-    logger.info("adding wifi profile: %r", path)
-    name = os.path.basename(path)
-    dst = os.path.join(dest, name)
-    logger.debug("> copyfile: %r -> %r", path, dst)
-    shutil.copyfile(path, dst)
-    return dst
+    logger.debug("> copyfile: %r -> %r", path, dest)
+    shutil.copyfile(path, dest)
+    logger.info("added Wi-Fi profile: %r", path)
 
 
 def _hide_pass(cmd):
@@ -279,28 +275,37 @@ def convert_p12(p12, dir, passwd, name='identity'):
         os.chmod(file, 0o0600)
 
 
-def copy_certs(path, dest):
+def copy_certs(path):
     """
-    copy files from path into dest (w/ chmod)
-    returns list of copied files
+    :path:  directory containing exported supervision identity key and cert
     """
     logger = logging.getLogger(__name__)
-    logger.debug("copying certs: %r: %r", path, dest)
+    
+    logger.info("copying certs: %r", path)
     if not os.path.isdir(path):
         err = "not a directory: {0!r}".format(path)
         logger.error(err)
         raise ValueError(err)
-    certs = []
+
+    resource = resources.Resources()
     for root, _, files in os.walk(path):
         for file in files:
+            name, ext = os.path.splitext(file):
+            if ext in ['.der', '.key']:
+                logger.debug("found key: %r", file)
+                dst = resource.key
+            elif ext in ['.cert', '.crt']:
+                logger.debug("found cert: %r", file)
+                dst = resource.cert
+            else:
+                logger.debug("skipping: %r", file)
+                continue
+
             src = os.path.join(root, file)
-            dst = os.path.join(dest, file)
             logger.debug("> copyfile: %r -> %r", src, dst)
             shutil.copyfile(src, dst)
             logger.debug("> chmod: %o: %r", 0o0600, dst)
             os.chmod(dst, 0o0600)
-            certs.append(dst)
-    return certs
 
 
 def add_p12(p12, dir, name='identity'):
@@ -312,10 +317,10 @@ def add_p12(p12, dir, name='identity'):
     # get pksc12 password
     passwd = p12_passwd(p12)
     # extract unencrypted key 
-    key = os.path.join(dir, '{0}.der'.format(name))
+    key = os.path.join(dir, '{0!s}.der'.format(name))
     extract(p12, key, passwd, ['-nodes', '-nocerts'], 'rsa')
     # extract crt
-    crt = os.path.join(dir, '{0}.crt'.format(name))
+    crt = os.path.join(dir, '{0!s}.crt'.format(name))
     extract(p12, crt, passwd, ['-nokeys', '-clcerts'], 'x509')
     
 

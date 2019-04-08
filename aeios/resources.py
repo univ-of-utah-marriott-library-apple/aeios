@@ -3,11 +3,8 @@
 import os
 import logging
 
-# from actools import cfgutil
-
 from . import config
 from . import reporting
-
 
 """
 Shared resources for aeios
@@ -17,7 +14,7 @@ __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = '0.0.0'
+__version__ = '1.0.1'
 __all__ = []
 
 
@@ -157,7 +154,7 @@ class Resources(object):
         self.path = path if path else PATH
         if name:
             self.domain = "{0}.{1}".format(DOMAIN, name)
-            self.log.debug("building config: %r: %r", self.domain, path)
+            self.log.debug("building config: %r: %r", self.domain, self.path)
             self.config = _config(self.domain, path)
         else:
             self.domain = DOMAIN
@@ -243,8 +240,8 @@ def build_directories(root, names, mode=0o755):
     dirs = [os.path.join(root, x) for x in names]
     for d in dirs:
         if not os.path.isdir(d):
-            logger.debug("> mkdir: %r (mode=%o)", d, mode)
-            os.mkdir(d, mode)
+            logger.debug("> makedirs: %r (mode=%o)", d, mode)
+            os.makedirs(d, mode)
         else:
             logger.debug("directory exists: %r", d)
     return dirs
