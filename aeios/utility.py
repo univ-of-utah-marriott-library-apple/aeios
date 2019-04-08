@@ -7,6 +7,7 @@ import argparse
 import subprocess
 # import datetime as dt
 
+import aeios
 
 """
 Utility functions for aeiosutil
@@ -35,12 +36,12 @@ class Parser(object):
     """
     def __init__(self):
         self.parser = argparse.ArgumentParser(description='configures aeios')
-        # parser.add_argument('-v', '--verbose', action='store_true', 
-        #                     help='be verbose')
-        # parser.add_argument('-d', '--debug', action='store_true',
-        #                     help='be VERY verbose')
-        # parser.add_argument('--version', action='store_true', 
-        #                     help='print version and exit')
+        parser.add_argument('-v', '--verbose', action='store_true', 
+                            help='be verbose')
+        parser.add_argument('-d', '--debug', action='store_true',
+                            help='be VERY verbose')
+        parser.add_argument('--version', action='store_true', 
+                            help='print version and exit')
 
         desc = 'see `%(prog)s COMMAND --help` for more information'
         self.subparsers = self.parser.add_subparsers(title='COMMANDS', 

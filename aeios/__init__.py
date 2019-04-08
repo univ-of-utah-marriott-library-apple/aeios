@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 
-import config
-import apps
-import tethering
+from . import apps
+from . import config
+from . import reporting
+from . import resources
+from . import tethering
+from . import utility
 
-from actools import cfgutil, adapter
-from device import Device, DeviceList
-from tasklist import TaskList
-from devicemanager import DeviceManager, Stopped
+from .device import Device, DeviceList
+from .devicemanager import DeviceManager, Stopped
+from .tasklist import TaskList
 
 """
 Automated Enterprise iOS
@@ -19,13 +21,12 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.8.2"
+__version__ = "2.8.3"
 __all__ = [
     'apps',
+    'Device',
+    'DeviceList',
     'DeviceManager',
     'Stopped',
-    'Device',
     'TaskList',
-    'cfgutil',
-    'adapter',
     'tethering']

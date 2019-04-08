@@ -249,6 +249,7 @@ class AppManager(object):
         self.log = logging.getLogger(__name__)
 
         if not resource:
+            self.log.debug("getting resources: %r", __name__)
             resource = resources.Resources(__name__)
         self.resources = resource
 
@@ -413,7 +414,6 @@ class AppManager(object):
             self.config.update({group: list(modified)})
         self._record = self.config.read()
         
-
     def unknown(self, device, appnames=None):
         """
         :returns: AppList of unknown apps (new apps)
