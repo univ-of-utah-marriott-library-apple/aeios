@@ -388,22 +388,22 @@ class AppManager(object):
         :returns: None
         """
         if not apps:
-            self.log.error("nothing was specified for removal")
+            self.log.error("nothing to remove")
             return
 
         if isinstance(apps, (str, unicode)):
             # not pythonic, but better than adding each chr of the string
             apps = (apps,)
 
-        current = self.config.get(group, [])
         if not groups:
             groups = self.groups()
-        
+
         for group in groups:
             current = set(self.config.get(group, []))
             removed = current - set(apps)
             self.config.update({group: list(removed)})
         self._record = self.config.read()
+        
 
     def unknown(self, device, appnames=None):
         """

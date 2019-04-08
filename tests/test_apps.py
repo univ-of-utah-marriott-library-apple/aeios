@@ -25,7 +25,7 @@ TMPDIR = os.path.join(LOCATION, 'tmp')
 DATA = os.path.join(TMPDIR, 'apps')
 TMP = os.path.join(TMPDIR, 'apps')
 PREFERENCES = os.path.join(TMP, 'Preferences')
-DEBUG = True
+DEBUG = False
 
 def setUpModule():
     """
@@ -49,47 +49,6 @@ def tearDownModule():
     """
     if not DEBUG:
         shutil.rmtree(TMPDIR)
-
-
-class BaseTestCaseOLD(unittest.TestCase):
-    
-    file = None
-    devices = [{'UDID':'aabbccddeeff0011223344556677889900000001',
-                'ECID':'0x00000000000001', 'deviceType':'iPad7,5'},
-               {'UDID':'aabbccddeeff0011223344556677889900000002',
-                'ECID':'0x00000000000002', 'deviceType':'iPad7,3'},
-               {'UDID':'aabbccddeeff0011223344556677889900000003',
-                'ECID':'0x00000000000003', 'deviceType':'iPad12,8'}]
-
-    @classmethod
-    def setUpClass(cls):
-        cls.tmp = TMP
-
-        cls.resources = resources.Resources()
-
-        ipad, ipadpro, newipad = cls.devices
-        devicepath = cls.resources.devices
-        cls.ipad = device.Device(ipad['ECID'], ipad, path=devicepath)
-        cls.ipadpro = device.Device(ipadpro['ECID'], ipadpro, path=devicepath)
-        cls.newipad = device.Device(newipad['ECID'], newipad, path=devicepath)
-
-        cls.manager = apps.AppManager('test', cls.resources)
-        cls.file = cls.manager.file
-        
-    @classmethod
-    def tearDownClass(cls):
-        shutil.rmtree(cls.resources.devices)
-        os.remove(cls.file)
-        
-    def setUp(self):
-        cls = self.__class__
-        self.ipad = cls.ipad
-        self.ipadpro = cls.ipadpro
-        self.newipad = cls.newipad
-        self.apps = cls.manager
-    
-    def tearDown(self):
-        pass
 
 
 class BaseTestCase(unittest.TestCase):
@@ -174,7 +133,7 @@ class ErrorTest(BaseTestCase):
 
 class AppManagerTest(BaseTestCase):
     """
-    Generic Tests for AppManagers
+    Generic Tests for AppManager
     """
 
     @classmethod
@@ -207,83 +166,169 @@ class AppManagerTest(BaseTestCase):
     def setUp(self):
         BaseTestCase.setUp(self)
         self.resources = resources.Resources('aeios.apps')
-        self.apps = self.__class__.manager
+        self.manager = self.__class__.manager
 
     def tearDown(self):
         BaseTestCase.tearDown(self)
         os.remove(self.resources.config.file)
     
     def test_resources_exist(self):
-        self.assertTrue(os.path.exists(self.apps.config.file))
-    
-# @unittest.skip("blah")
+        self.assertTrue(os.path.exists(self.manager.config.file))
+
+
 class TestAppManagerGroups(AppManagerTest):
-
-    def setUp(self):
-        AppManagerTest.setUp(self)
-        self.apps = apps.AppManager('base-test', self.resources)
-        self.file = self.apps.file
-
-    def tearDown(self):
-        os.remove(self.file)
     
     def test_groups_with_iPad7_5(self):
-        groups = self.apps.groups(self.ipad)
+        groups = self.manager.groups(self.ipad)
         expected = ['iPads', 'all-iPads']
         self.assertItemsEqual(groups, expected)
         
     def test_groups_with_iPad7_3(self):
-        groups = self.apps.groups(self.ipadpro)
+        groups = self.manager.groups(self.ipadpro)
         expected = ['iPadPros', 'all-iPads']
         self.assertItemsEqual(groups, expected)
             
     def test_add_apps_to_missing_group(self):
-        self.apps.add('custom', ['test', 'test2', 'test3', 'test'])
-        result = self.apps.config.read()['custom']
+        self.manager.add('custom', ['test', 'test2', 'test3', 'test'])
+        result = self.manager.config.read()['custom']
         expected = ['test', 'test2', 'test3']
         self.assertItemsEqual(result, expected)
-        self.assertIn('custom', self.apps.groups())
+        self.assertIn('custom', self.manager.groups())
     
     def test_add_apps_to_existing_group(self):
-        result = self.apps.add('all-ipads', ['test', 'test2', 'test3', 'test'])
+        result = self.manager.add('all-ipads', ['test', 'test2', 'test3', 'test'])
         expected = ['test', 'test2', 'test3']
         self.assertItemsEqual(result, expected)
         
     def test_list_all_apps_for_ipad7_5(self):
-        # self.apps.add('all', ['all'])
-        self.apps.add('all-iPads', ['all-ipads'])
-        self.apps.add('iPadPros', ['pro-apps'])
-        apps = self.apps.list(self.ipadpro)
+        # self.manager.add('all', ['all'])
+        self.manager.add('all-iPads', ['all-ipads'])
+        self.manager.add('iPadPros', ['pro-apps'])
+        apps = self.manager.list(self.ipadpro)
         expected = ['all-ipads', 'pro-apps']
         self.assertItemsEqual(apps, expected)
         
     def test_list_all_apps_for_ipad7_3(self):
-        # self.apps.add('all', ['all'])
-        self.apps.add('all-iPads', ['all-ipads'])
-        self.apps.add('iPads', ['non-pro-apps'])
-        apps = self.apps.list(self.ipad)
+        # self.manager.add('all', ['all'])
+        self.manager.add('all-iPads', ['all-ipads'])
+        self.manager.add('iPads', ['non-pro-apps'])
+        apps = self.manager.list(self.ipad)
         expected = ['all-ipads', 'non-pro-apps']
         self.assertItemsEqual(apps, expected)
         
     def test_groups_fails_without_model_attribute(self):
         with self.assertRaises(AttributeError):
-            self.apps.groups({})
+            self.manager.groups({})
 
-
-# @unittest.skip("blah")
+# @unittest.skip("modified")
 class TestRemoveApps(AppManagerTest):
     """
     Tests for removing apps
-
-    test__empty()
-    test_no_group()
-    test_missing_group()
-    test_missing_list()
-    test_empty_list()
-    tests_remove_all()
     """
-    pass
+    def setUp(self):
+        # this needs to be changed in AppManagerTest     
+        AppManagerTest.setUp(self)
+        # str, unicode (no prefix), unicode (w/prefix)
+        self.apps = ['test', u'test – 3', u'テスト']
+        self.apps2 = ['test', u'test – 2', u'テスト2']
+        self.manager.config.update({'all-iPads': self.apps})
+        self.manager.config.update({'Custom': self.apps2})
+        self.assertApps(self.apps, group='all-iPads')
+        self.assertApps(self.apps2, group='Custom')
 
+    def assertApps(self, apps, group=None):
+        if not group:
+            raise ValueError("no group was specified")
+        result = self.manager.config.get(group)
+        self.assertItemsEqual(apps, result)
+
+    def test_remove_None(self):
+        """
+        test removing None does nothing
+        """
+        self.manager.remove(None)
+        self.assertApps(self.apps, group='all-iPads')
+        self.assertApps(self.apps2, group='Custom')
+    
+    def test_remove_no_group(self):
+        """
+        test removing default group
+        """
+        self.manager.remove(['test'])
+        self.apps.remove('test')
+        self.assertNotIn('test', self.apps)
+        self.assertApps(self.apps, group='all-iPads')
+    
+    def test_remove_multiple_groups(self):
+        """
+        test removing from multiple groups
+        """
+        self.manager.remove(['test'], groups=None)
+
+        self.apps.remove('test')
+        self.assertNotIn('test', self.apps)
+        self.assertApps(self.apps, group='all-iPads')
+
+        self.apps2.remove('test')
+        self.assertNotIn('test', self.apps2)
+        self.assertApps(self.apps2, group='Custom')
+
+    @unittest.skip("Unfinished")
+    def test_remove_non_iterable_group(self):
+        """
+        test non-iterable group raises an error
+        """
+        raise NotImplementedError("test not written")
+    
+    @unittest.skip("Unfinished")
+    def test_remove_empty_list(self):
+        """
+        test removing empty list does nothing
+        """
+        raise NotImplementedError("test not written")
+    
+    @unittest.skip("Unfinished")
+    def test_remove_set(self):
+        """
+        test removing sets is supported
+        """
+        raise NotImplementedError("test not written")
+    
+    @unittest.skip("Unfinished")
+    def test_remove_tuple(self):
+        """
+        test removing tuples is supported
+        """
+        raise NotImplementedError("test not written")
+
+    @unittest.skip("Unfinished")
+    def test_remove_unicode_app(self):
+        """
+        test removing tuples is supported
+        """
+        raise NotImplementedError("test not written")
+
+    @unittest.skip("Unfinished")
+    def test_remove_string(self):
+        """
+        test removing string is supported
+        """
+        raise NotImplementedError("test not written")
+
+    @unittest.skip("Unfinished")
+    def test_remove_AppList(self):
+        """
+        test removing AppList is supported
+        """
+        raise NotImplementedError("test not written")
+
+    @unittest.skip("Unfinished")
+    def test_remove_all(self):
+        """
+        test removing all items
+        """
+        raise NotImplementedError("test not written")
+        
 
 class TestAddApps(AppManagerTest):
     """
@@ -303,7 +348,7 @@ class TestAddApps(AppManagerTest):
         test adding None does nothing
         """
         expected = []
-        result = self.apps.add('all-iPads', None)
+        result = self.manager.add('all-iPads', None)
         self.assertEquals(expected, result)
 
     def test_None_group(self):
@@ -311,14 +356,14 @@ class TestAddApps(AppManagerTest):
         test adding None does nothing
         """
         with self.assertRaises(TypeError):
-            result = self.apps.add(None, ['test'])
+            result = self.manager.add(None, ['test'])
 
     def test_add_empty(self):
         """
         test adding empty list does nothing
         """
         expected = []
-        result = self.apps.add('all-iPads', [])
+        result = self.manager.add('all-iPads', [])
         self.assertEquals(expected, result)
 
     def test_add_string(self):
@@ -326,7 +371,7 @@ class TestAddApps(AppManagerTest):
         test single string added
         """
         expected = ['test']
-        result = self.apps.add('all-iPads', 'test')
+        result = self.manager.add('all-iPads', 'test')
         self.assertItemsEqual(expected, result)
 
     def test_add_set(self):
@@ -334,7 +379,7 @@ class TestAddApps(AppManagerTest):
         test adding set
         """
         expected = ['test', 'test2', 'test3']
-        result = self.apps.add('all-iPads', set(expected))
+        result = self.manager.add('all-iPads', set(expected))
         self.assertItemsEqual(expected, result)    
 
     def test_add_list(self):
@@ -342,7 +387,7 @@ class TestAddApps(AppManagerTest):
         test adding list
         """
         expected = ['test', 'test2', 'test3']
-        result = self.apps.add('all-iPads', expected)
+        result = self.manager.add('all-iPads', expected)
         self.assertItemsEqual(expected, result)    
 
     def test_add_tuple(self):
@@ -350,7 +395,7 @@ class TestAddApps(AppManagerTest):
         test adding tuple
         """
         expected = ('test', 'test2', 'test3')
-        result = self.apps.add('all-iPads', expected)
+        result = self.manager.add('all-iPads', expected)
         self.assertItemsEqual(expected, result)    
 
     def test_add_unicode_app(self):
@@ -358,10 +403,10 @@ class TestAddApps(AppManagerTest):
         test adding set of strings
         """
         expected = [u'大辞林']
-        result = self.apps.add('all-iPads', expected)
+        result = self.manager.add('all-iPads', expected)
         self.assertItemsEqual(expected, result)
         # also verify app was added
-        data = self.apps.config.get('all-iPads')
+        data = self.manager.config.get('all-iPads')
         self.assertItemsEqual(expected, data)
         
 
@@ -371,10 +416,10 @@ class TestAppManagerList(AppManagerTest):
 
     def setUp(self):
         AppManagerTest.setUp(self)
-        self.apps.add('all-iPads', 
+        self.manager.add('all-iPads', 
                       ['Box Sync', 'Excel', 'Slack', 'PowerPoint', 'Word'])
-        self.apps.add('iPads', ['Something Lite'])
-        self.apps.add('iPadPros', ['Something Pro', 'Final Cut Pro'])
+        self.manager.add('iPads', ['Something Lite'])
+        self.manager.add('iPadPros', ['Something Pro', 'Final Cut Pro'])
 
     def tearDown(self):
         AppManagerTest.tearDown(self)
@@ -382,46 +427,45 @@ class TestAppManagerList(AppManagerTest):
     def test_list_all_apps_for_ipadpro(self):
         expected = ['Slack', 'PowerPoint', 'Word','Box Sync', 'Excel', 
                     'Something Pro', 'Final Cut Pro']
-        result = self.apps.list(self.ipadpro)
+        result = self.manager.list(self.ipadpro)
         self.assertItemsEqual(expected, result)
 
     def test_list_all_apps_for_ipadpro_excluding_exists(self):
         expected = ['Slack', 'PowerPoint', 'Word', 'Box Sync', 
                     'Something Pro', 'Final Cut Pro']
-        result = self.apps.list(self.ipadpro, exclude=['Excel'])
+        result = self.manager.list(self.ipadpro, exclude=['Excel'])
         self.assertItemsEqual(expected, result)
 
     def test_list_all_apps_for_ipadpro_excluding_missing(self):
         expected = ['Slack', 'PowerPoint', 'Word','Box Sync', 'Excel', 
                     'Something Pro', 'Final Cut Pro']
-        result = self.apps.list(self.ipadpro, exclude=['Missing'])
+        result = self.manager.list(self.ipadpro, exclude=['Missing'])
         self.assertItemsEqual(expected, result)
 
     def test_list_all_apps_for_ipad(self):
         expected = ['Slack', 'PowerPoint', 'Word','Box Sync', 'Excel', 
                     'Something Lite']
-        result = self.apps.list(self.ipad)
+        result = self.manager.list(self.ipad)
         self.assertItemsEqual(expected, result)
 
     def test_list_all_apps_for_ipad_excluding_exists(self):
         expected = ['Slack', 'PowerPoint', 'Box Sync', 'Excel', 
                     'Something Lite']
-        result = self.apps.list(self.ipad, exclude=['Word'])
+        result = self.manager.list(self.ipad, exclude=['Word'])
         self.assertItemsEqual(expected, result)
 
     def test_list_all_apps_for_ipad_excluding_missing(self):
         expected = ['Slack', 'PowerPoint', 'Word', 'Box Sync', 'Excel', 
                     'Something Lite']
-        result = self.apps.list(self.ipad, exclude=['Missing'])
+        result = self.manager.list(self.ipad, exclude=['Missing'])
         self.assertItemsEqual(expected, result)
 
     def test_list_new_ipad(self):
         expected = ['Box Sync', 'Excel', 'Slack', 'PowerPoint', 'Word']
-        result = self.apps.list(self.newipad, exclude=['Missing'])
+        result = self.manager.list(self.newipad, exclude=['Missing'])
         self.assertItemsEqual(expected, result)
 
 
-# @unittest.skip("blah")
 class TestAppManagerBreakdown(AppManagerTest):
 
     @classmethod
@@ -434,17 +478,17 @@ class TestAppManagerBreakdown(AppManagerTest):
 
     def test_breakdown_returns_list(self):
         devices = [self.ipad, self.ipadpro]
-        test = self.apps.breakdown(devices)
+        test = self.manager.breakdown(devices)
         self.assertTrue(isinstance(test, list))
 
     def test_breakdown_returns_three_instructions(self):
         devices = [self.ipad, self.ipadpro]
-        test = self.apps.breakdown(devices)
+        test = self.manager.breakdown(devices)
         self.assertTrue(len(test) == 3)
 
     def test_breakdown_returns_two_instructions(self):
         devices = [self.ipadpro]
-        test = self.apps.breakdown(devices)
+        test = self.manager.breakdown(devices)
         self.assertTrue(len(test) == 2)
 
 
