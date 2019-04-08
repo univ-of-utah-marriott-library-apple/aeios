@@ -25,12 +25,12 @@ TMPDIR = os.path.join(LOCATION, 'tmp')
 DATA = os.path.join(TMPDIR, 'apps')
 TMP = os.path.join(TMPDIR, 'apps')
 PREFERENCES = os.path.join(TMP, 'Preferences')
-DEBUG = False
+
 
 def setUpModule():
     """
-    create tmp directories
     modify resources
+    create tmp directories
     """
     resources.PATH = TMP
     resources.PREFERENCES = PREFERENCES
@@ -47,8 +47,11 @@ def tearDownModule():
     """
     remove tmp directory
     """
-    if not DEBUG:
+    try:
         shutil.rmtree(TMPDIR)
+    except OSError as e:
+        if e.errno == 2:
+            pass
 
 
 class BaseTestCase(unittest.TestCase):
@@ -67,30 +70,119 @@ class BaseTestCase(unittest.TestCase):
         
     @classmethod
     def tearDownClass(cls):
-        if not DEBUG:
-            try:
-                shutil.rmtree(cls.resources.path)
-            except OSError as e:
-                if e.errno == 2:
-                    pass
+        try:
+            shutil.rmtree(cls.resources.path)
+        except OSError as e:
+            if e.errno == 2:
+                pass
         
-#     def setUp(self):
-#         self.resources = self.__class__.resources
-#     
-#     def tearDown(self):
-#         try:
-#             os.remove(self.resources.config.file)
-#         except OSError as e:
-#             if e.errno == 2:
-#                 pass
+    def setUp(self):
+        self.resources = self.__class__.resources
+    
+    def tearDown(self):
+        pass
 
 
-# @unittest.skip("Not Finished")
 class AppTest(BaseTestCase):
     """
     generic tests for aeios.apps.App
     """
-    pass
+    def setUp(self):
+        BaseTestCase.setUp(self)
+                     # test app
+        self.data = {'test': {'itunesName': u'«Test App»',
+                              'bundleVersion': '1.0.1',
+                              'displayName': u'… Test App',
+                              'bundleIdentifier': 'edu.app.test'},
+                     # newer version of test app
+                     'test2': {'itunesName': u'Test App …',
+                               'bundleVersion': '2.0.2',
+                               'displayName': u'… Test App',
+                               'bundleIdentifier': 'edu.app.test'},
+                     # different app
+                     'other': {'itunesName': u'Another App …',
+                               'bundleVersion': '1.0.2',
+                               'displayName': u'… Another App',
+                               'bundleIdentifier': 'edu.app.test.other'}}
+
+        self.app = apps.App(self.data['test'], path=self.resources.apps)
+        self.appv2 = apps.App(self.data['test2'], path=self.resources.apps)
+        self.other = apps.App(self.data['other'], path=self.resources.apps)
+    
+    def test_name_attr(self):
+        """
+        test App has 'name' attribute
+        """
+        self.assertTrue(hasattr(self.app, 'name'))
+
+    def test_version_attr(self):
+        """
+        test App has 'version' attribute
+        """
+        self.assertTrue(hasattr(self.app, 'version'))
+
+    def test_displayname_attr(self):
+        """
+        test App has 'displayname' attribute
+        """
+        self.assertTrue(hasattr(self.app, 'displayname'))
+
+    def test_identifier_attr(self):
+        """
+        test App has 'identifier' attribute
+        """
+        self.assertTrue(hasattr(self.app, 'identifier'))
+
+    def test_boolean(self):
+        """
+        test App has 'identifier' attribute
+        """
+        self.assertTrue(self.app)
+
+
+class TestAppComparison(AppTest):
+
+    def test_identical_equality(self):
+        """
+        test identical app is equal
+        """
+        identical = apps.App(self.data['test'])
+        # make sure we aren't comparing the same object
+        self.assertIsNot(self.app, identical)
+        self.assertTrue(self.app == identical)
+
+    def test_identical_inequality(self):
+        """
+        test identical app is not unequal
+        """
+        identical = apps.App(self.data['test'])
+        # make sure we aren't comparing the same object
+        self.assertIsNot(self.app, identical)
+        self.assertFalse(self.app != identical)
+
+    def test_newer_equality(self):
+        """
+        test App(v1.0.1) == App(v2.0.2) == False
+        """
+        self.assertFalse(self.app == self.appv2)
+
+    def test_newer_inequality(self):
+        """
+        test App(v1.0.1) != App(v2.0.2) == True
+        """
+        self.assertTrue(self.app != self.appv2)
+
+    def test_different_equality(self):
+        """
+        test app == different == False
+        """
+        self.assertFalse(self.app == self.other)
+
+    def test_newer_inequality(self):
+        """
+        test App(1.0.1) != app (2.0.2) == True
+        """
+        self.assertTrue(self.app != self.appv2)
 
 
 class AppListTest(BaseTestCase):
@@ -123,7 +215,6 @@ class EmptyAppList(AppListTest):
         self.assertTrue(not self.applist)
 
 
-# @unittest.skip("Not Finished")
 class ErrorTest(BaseTestCase):
     """
     generic tests for aeios.apps.AppList
@@ -150,7 +241,7 @@ class AppManagerTest(BaseTestCase):
         ipad8_1 = {'UDID': 'aabbccddeeff0011223344556677889900000003',
                    'ECID': '0x00000000000003', 'deviceType': 'iPad8,1'}
         ipadf_n = {'UDID': 'aabbccddeeff0011223344556677889900000004',
-                   'ECID':'0x00000000000004', 'deviceType': 'iPad128,65'}
+                   'ECID':'0x00000000000004', 'deviceType': 'iPad99,9'}
 
         cls.ipad = device.Device(ipad7_5['ECID'], ipad7_5, 
                                   path=cls.resources.devices)
@@ -220,21 +311,19 @@ class TestAppManagerGroups(AppManagerTest):
         with self.assertRaises(AttributeError):
             self.manager.groups({})
 
-# @unittest.skip("modified")
+
 class TestRemoveApps(AppManagerTest):
     """
     Tests for removing apps
     """
     def setUp(self):
-        # this needs to be changed in AppManagerTest     
         AppManagerTest.setUp(self)
         # str, unicode (no prefix), unicode (w/prefix)
         self.apps = ['test', u'test – 3', u'テスト']
-        self.apps2 = ['test', u'test – 2', u'テスト2']
         self.manager.config.update({'all-iPads': self.apps})
-        self.manager.config.update({'Custom': self.apps2})
+        self.manager.config.update({'Custom': self.apps})
         self.assertApps(self.apps, group='all-iPads')
-        self.assertApps(self.apps2, group='Custom')
+        self.assertApps(self.apps, group='Custom')
 
     def assertApps(self, apps, group=None):
         if not group:
@@ -248,7 +337,7 @@ class TestRemoveApps(AppManagerTest):
         """
         self.manager.remove(None)
         self.assertApps(self.apps, group='all-iPads')
-        self.assertApps(self.apps2, group='Custom')
+        self.assertApps(self.apps, group='Custom')
     
     def test_remove_no_group(self):
         """
@@ -259,75 +348,91 @@ class TestRemoveApps(AppManagerTest):
         self.assertNotIn('test', self.apps)
         self.assertApps(self.apps, group='all-iPads')
     
-    def test_remove_multiple_groups(self):
+    def test_remove_multiple_groups_as_tuple(self):
         """
-        test removing from multiple groups
+        test removing from multiple groups as tuple
         """
-        self.manager.remove(['test'], groups=None)
+        self.manager.remove(['test'], groups=('all-iPads', 'Custom'))
 
-        self.apps.remove('test')
-        self.assertNotIn('test', self.apps)
-        self.assertApps(self.apps, group='all-iPads')
+        expected = [x for x in self.apps if x != 'test']
+        self.assertApps(expected, group='all-iPads')
+        self.assertApps(expected, group='Custom')
 
-        self.apps2.remove('test')
-        self.assertNotIn('test', self.apps2)
-        self.assertApps(self.apps2, group='Custom')
+    def test_remove_multiple_groups_as_list(self):
+        """
+        test removing from multiple groups as list
+        """
+        self.manager.remove(['test'], groups=['all-iPads', 'Custom'])
 
-    @unittest.skip("Unfinished")
+        expected = [x for x in self.apps if x != 'test']
+        self.assertApps(expected, group='all-iPads')
+        self.assertApps(expected, group='Custom')
+
     def test_remove_non_iterable_group(self):
         """
         test non-iterable group raises an error
         """
-        raise NotImplementedError("test not written")
+        with self.assertRaises(TypeError):
+            self.manager.remove(['test'], groups=2)
     
-    @unittest.skip("Unfinished")
     def test_remove_empty_list(self):
         """
         test removing empty list does nothing
         """
-        raise NotImplementedError("test not written")
+        self.manager.remove([], groups=('all-iPads', 'Custom'))
+        self.assertApps(self.apps, group='all-iPads')
+        self.assertApps(self.apps, group='Custom')
     
-    @unittest.skip("Unfinished")
     def test_remove_set(self):
         """
         test removing sets is supported
         """
-        raise NotImplementedError("test not written")
+        self.manager.remove(set(['test']), groups=('all-iPads', 'Custom'))
+        expected = [x for x in self.apps if x != 'test']
+        self.assertApps(expected, group='all-iPads')
+        self.assertApps(expected, group='Custom')
     
-    @unittest.skip("Unfinished")
     def test_remove_tuple(self):
         """
         test removing tuples is supported
         """
-        raise NotImplementedError("test not written")
+        self.manager.remove(('test',), groups=('all-iPads', 'Custom'))
+        expected = [x for x in self.apps if x != 'test']
+        self.assertApps(expected, group='all-iPads')
+        self.assertApps(expected, group='Custom')
 
-    @unittest.skip("Unfinished")
     def test_remove_unicode_app(self):
         """
         test removing tuples is supported
         """
-        raise NotImplementedError("test not written")
+        self.manager.remove([u'テスト'], groups=('all-iPads', 'Custom'))
+        expected = [x for x in self.apps if x != u'テスト']
+        self.assertApps(expected, group='all-iPads')
+        self.assertApps(expected, group='Custom')
 
-    @unittest.skip("Unfinished")
     def test_remove_string(self):
         """
         test removing string is supported
         """
-        raise NotImplementedError("test not written")
+        self.manager.remove('test', groups=('all-iPads', 'Custom'))
+        expected = [x for x in self.apps if x != 'test']
+        self.assertApps(expected, group='all-iPads')
+        self.assertApps(expected, group='Custom')
 
-    @unittest.skip("Unfinished")
     def test_remove_AppList(self):
         """
         test removing AppList is supported
         """
-        raise NotImplementedError("test not written")
-
-    @unittest.skip("Unfinished")
-    def test_remove_all(self):
-        """
-        test removing all items
-        """
-        raise NotImplementedError("test not written")
+        x = {'itunesName': 'test', 
+             'bundleVersion': '1.0', 
+             'displayName': 'a test', 
+             'bundleIdentifier': 'test.app'}
+        app = apps.App(x)
+        applist = apps.AppList([app])
+        expected = [x for x in self.apps if x != 'test']
+        self.manager.remove(applist, groups=('all-iPads', 'Custom'))
+        self.assertApps(expected, group='all-iPads')
+        self.assertApps(expected, group='Custom')
         
 
 class TestAddApps(AppManagerTest):
@@ -337,11 +442,9 @@ class TestAddApps(AppManagerTest):
     """
     def setUp(self):
         AppManagerTest.setUp(self)
-        logging.getLogger('aeios.apps').setLevel(logging.DEBUG)
 
     def tearDown(self):
         AppManagerTest.tearDown(self)
-        logging.getLogger('aeios.apps').setLevel(logging.CRITICAL)
 
     def test_add_None(self):
         """
@@ -410,8 +513,6 @@ class TestAddApps(AppManagerTest):
         self.assertItemsEqual(expected, data)
         
 
-
-# @unittest.skip("blah")
 class TestAppManagerList(AppManagerTest):
 
     def setUp(self):
@@ -493,11 +594,10 @@ class TestAppManagerBreakdown(AppManagerTest):
 
 
 if __name__ == '__main__':
-    if DEBUG:
-        fmt = ('%(asctime)s %(process)d: %(levelname)6s: '
-               '%(name)s - %(funcName)s(): %(message)s')
-        logging.basicConfig(format=fmt, level=logging.CRITICAL)
-        logging.getLogger('aeios.resources').setLevel(logging.CRITICAL)
+    fmt = ('%(asctime)s %(process)d: %(levelname)6s: '
+           '%(name)s - %(funcName)s(): %(message)s')
+    # logging.basicConfig(format=fmt, level=logging.DEBUG)
+    # logging.getLogger('aeios.resources').setLevel(logging.CRITICAL)
     unittest.main(verbosity=1)
 #     loader = unittest.TestLoader()
 #     _tests = unittest.TestSuite(map(TestAddApps, ['test_add_unicode_app']))

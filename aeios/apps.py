@@ -72,6 +72,9 @@ class App(object):
     def __eq__(self, x):
         return self.name == x.name and self.version == x.version
 
+    def __ne__(self, x):
+        return not self == x
+
     def __lt__(self, x):
         if self.name != x.name:
             raise AppError("unable to compare different apps")
@@ -394,14 +397,20 @@ class AppManager(object):
         if isinstance(apps, (str, unicode)):
             # not pythonic, but better than adding each chr of the string
             apps = (apps,)
+        elif isinstance(apps, AppList):
+            # not pythonic, but better than adding each chr of the string
+            apps = apps.names
 
         if not groups:
             groups = self.groups()
 
+        self.log.debug(u"removing: %r from %r", apps, groups)
         for group in groups:
             current = set(self.config.get(group, []))
-            removed = current - set(apps)
-            self.config.update({group: list(removed)})
+            self.log.debug("current: %r", current)
+            modified = current - set(apps)
+            self.log.debug("modified: %r", modified)
+            self.config.update({group: list(modified)})
         self._record = self.config.read()
         
 
