@@ -3,6 +3,7 @@
 
 import os
 import sys
+import shutil
 import logging
 
 import aeios
@@ -15,31 +16,43 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.4"
+__version__ = "1.0.5"
 
 # name of this script
 SCRIPT = os.path.basename(sys.argv[0])
 
 def add(resources, args):
     logger = logging.getLogger(__name__)
+
+    #> aeiosutil add wifi PATH
     if args.item == 'wifi':
         aeios.utility.add_wifi_profile(args.path, resources.wifi)
+
+    #> aeiosutil add image (--lock | --alert | --background) PATH
     elif args.item == 'image':
         aeios.utility.add_item(args.path, resources.images, name=args.image)
         logger.info("added %s image: %s", args.image, args.path)
+
+    #> aeiosutil add identity (--p12 | --certs) PATH
     elif args.item == 'identity':
-        if args.p12:
-            aeios.utility.add_p12(args.path, resources.supervision)
-        else:
-            try:
+        try:
+            if args.p12:
+                #> aeiosutil add identity --p12 PATH
+                aeios.utility.add_p12(args.path, resources.supervision)
+                logger.info("converted p12: %r", args.path)
+            else:
+                #> aeiosutil add identity --certs PATH
                 aeios.utility.copy_certs(args.path)
-            except ValueError as e:
-                raise SystemExit("{0!s}: {0!s}".format(SCRIPT, e))
-        logger.info("succesfully added identity: %r", args.path)
+                logger.info("imported identity files: %r", args.path)
+        except ValueError as e:
+            # both copy_certs() and add_p12() raise ValueErrors
+            raise SystemExit("{0!s}: {1!s}".format(SCRIPT, e))
+
+    #> aeiosutil add app "app name"
     elif args.item == 'app':
         logger.debug(u"adding app: '%s'", args.name)
-        manager = aeios.apps.AppManager().add(args.name)
-        logger.info(u"added app: '%s'", args.name)
+        manager = aeios.apps.AppManager().add('all-iPads', args.name)
+        logger.info(u"added app to automation: '%s'", args.name)
     else:
         err = "{0!s}: unable to add {1!r}".format(SCRIPT, args.item)
         raise SystemExit(err)
@@ -47,10 +60,19 @@ def add(resources, args):
 
 def remove(resources, args):
     logger = logging.getLogger(__name__)
+
+    #> aeiosutil remove wifi
     if args.item == 'wifi':
         logger.debug("> remove: %r", resources.wifi)
-        os.remove(resources.wifi)
+        try:
+            os.remove(resources.wifi)
+        except OSError as e:
+            if e.errno == 2:
+                # profile is already removed
+                pass
         logger.info("successfully removed Wi-Fi profile")
+
+    #> aeiosutil remove image (--background | --lock | --alert | --all)
     elif args.item == 'image':
         if args.image == 'all':
             logger.debug("> rmtree: %r", resources.images)
@@ -69,19 +91,24 @@ def remove(resources, args):
             except IndexError:
                 pass
             logger.info("%s image removed", args.image)
+
+    #> aeiosutil remove identity
     elif args.item == 'identity':
         logger.debug("> remove: %r", resources.key)
         os.remove(resources.key)
         logger.debug("> remove: %r", resources.cert)
         os.remove(resources.cert)
         logger.info("removed supervision identity")
+
+    #> aeiosutil remove app "app name"
     elif args.item == 'app':
         logger.debug(u"removing: '%s'", args.name)
         manager = aeios.apps.AppManager().remove(args.name)
-        logger.info(u"removed app: '%s'", args.name)
+        logger.info(u"removed app from automation: '%s'", args.name)
+
+    #> aeiosutil remove reporting
     elif args.item == 'reporting':
-        default = aeios.resources.DEFAULTS.reporting
-        resources.reporting.update(default)
+        resources.reporting(aeios.resources.DEFAULT.reporting)
         logger.info("removed reporting configuration")
     else:
         err = "{0!s}: unable to remove {1!r}".format(SCRIPT, args.item)
@@ -89,6 +116,9 @@ def remove(resources, args):
 
 
 def configure(resources, args):
+    logger = logging.getLogger(__name__)
+
+    #> aeiosutil configure slack URL CHANNEL [--name NAME]
     if args.item == 'slack':
         data = {'URL': args.URL, 'channel': args.channel, 'name': args.name}
         resources.reporting(data)
@@ -101,6 +131,7 @@ def configure(resources, args):
 def main(argv):
     logger = logging.getLogger(__name__)
     
+    # NOTE: defining before logging.basicConfig suppresses logging
     resources = aeios.resources.Resources()
 
     parser = aeios.utility.Parser()
@@ -109,7 +140,7 @@ def main(argv):
     if args.version:
         raise SystemExit("{0}: v{1}".format(SCRIPT, __version__))
 
-    # there's probably a better way to do this...
+    # there's probably a better way to dynamically format logging...
     format = '{0!s}: %(message)s'.format(SCRIPT)
     if args.debug:
         format = ('%(asctime)s %(levelname)6s: %(name)s - %(funcName)s(): '

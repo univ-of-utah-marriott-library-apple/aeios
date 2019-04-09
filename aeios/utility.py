@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import shutil
 import logging
 import argparse
@@ -281,32 +282,44 @@ def copy_certs(path):
     """
     logger = logging.getLogger(__name__)
     
-    logger.info("copying certs: %r", path)
+    logger.debug("locating identity files: %r", path)
     if not os.path.isdir(path):
-        err = "not a directory: {0!r}".format(path)
+        err = "invalid directory: {0!r}".format(path)
         logger.error(err)
         raise ValueError(err)
 
     resource = resources.Resources()
+    key, cert = None, None
     for root, _, files in os.walk(path):
-        for file in files:
-            name, ext = os.path.splitext(file):
-            if ext in ['.der', '.key']:
-                logger.debug("found key: %r", file)
-                dst = resource.key
-            elif ext in ['.cert', '.crt']:
-                logger.debug("found cert: %r", file)
-                dst = resource.cert
+        for name in files:
+            ext = os.path.splitext(name)[1]
+            _path = os.path.join(root, name)
+            if ext in ('.der', '.key'):
+                logger.debug("found key: %r", name)
+                if key:
+                    raise ValueError("multiple private keys found")
+                key = (_path, resource.key)
+            elif ext in ('.cert', '.crt'):
+                logger.debug("found cert: %r", name)
+                if cert:
+                    raise ValueError("multiple certs found")
+                cert = (_path, resource.cert)
             else:
-                logger.debug("skipping: %r", file)
+                logger.debug("skipping: %r", name)
                 continue
 
-            src = os.path.join(root, file)
-            logger.debug("> copyfile: %r -> %r", src, dst)
-            shutil.copyfile(src, dst)
-            logger.debug("> chmod: %o: %r", 0o0600, dst)
-            os.chmod(dst, 0o0600)
-
+    if not cert:
+        raise ValueError("missing cert")
+    elif not key:
+        raise ValueError("missing private key")
+    
+    # iterate (cert, key) as tuples (<src>, <dst>)
+    for src, dst in (cert, key):
+        logger.debug("> copyfile: %r -> %r", src, dst)
+        shutil.copyfile(src, dst)
+        logger.debug("> chmod: %o: %r", 0o0600, dst)
+        os.chmod(dst, 0o0600)
+        
 
 def add_p12(p12, dir, name='identity'):
     logger = logging.getLogger(__name__)
@@ -347,7 +360,7 @@ def p12_passwd(p12, attempts=3):
     # ran out of attempts
     err = "Invalid password: {0} failed attempt(s)...".format(count)
     logger.error("unable to add p12: %s", err)
-    raise RuntimeError(err)
+    raise ValueError(err)
 
 
 def extract(p12, outfile, passwd, args, tool):
