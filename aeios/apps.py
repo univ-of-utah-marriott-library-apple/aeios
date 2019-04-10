@@ -21,7 +21,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.4.1"
+__version__ = "2.4.2"
 __all__ = ['App',
            'AppError',
            'AppList',
@@ -245,19 +245,16 @@ class AlertManager(object):
 
 class AppManager(object):
                          
-    def __init__(self, name=None, resource=None):
+    def __init__(self, *args, **kwargs):
         self.log = logging.getLogger(__name__)
 
-        if not resource:
-            self.log.debug("getting resources: %r", __name__)
-            resource = resources.Resources(__name__)
-        self.resources = resource
+        self.resources = resources.Resources(__name__)
 
         domain = self.resources.domain
         path = self.resources.path
         self.config = self.resources.config
         self.file = self.config.file
-        self.errors = AlertManager(domain, resource)
+        self.errors = AlertManager(domain, self.resources)
         #TO-DO:
         # - merge global config (fix overwrite)
         #     * current overwrites
@@ -506,6 +503,12 @@ class AppManager(object):
         def _recovery(alert):
             # skip common errors until something better can be implemented
             logger = logging.getLogger(__name__)
+            logger.debug("received alert: %r", alert)
+            logger.debug(u"    message: %r", alert.message)
+            logger.debug(u"    details: %r", alert.details)
+            logger.debug(u"    options: %r", alert.options)
+            logger.debug(u"    choices: %r", alert.choices)
+
             if alerts:
                 logger.debug("previous alerts were found")
                 for a in alerts:
@@ -526,9 +529,10 @@ class AppManager(object):
                 logger.debug(u"skipping installed app: %s", alert)
                 adapter.action("Skip App", ["Apply to all apps"])
             
-            elif "An unexpected network error occurred" in alert.details:
-                logger.debug(u"attempting to retry network: %s", alert)
-                adapter.action("Try Again")
+            elif alert.details:
+                if "An unexpected network error occurred" in alert.details:
+                    logger.debug(u"attempting to retry network: %s", alert)
+                    adapter.action("Try Again")
 
             else:
                 raise RecoveryError(alert)
@@ -560,10 +564,13 @@ class AppManager(object):
                 self.log.debug("already commonly installed: %r", _installed)
                 self.log.debug("updating applist")
                 _apps = list(set(apps).difference(_installed))
+                timeout = 60 * len(_apps)
                 self.log.debug("new applist: %r", _apps)
                 self.log.info("installing: %r: %s", _apps, _devices)
+                self.log.debug("timeout: %d", timeout)
                 adapter.install_vpp_apps(_devices.udids, _apps, self.recovery, 
-                                         hook=hook('Installing', wrapped))
+                                         hook=hook('Installing', wrapped),
+                                         timeout=timeout)
             except adapter.ACStalled as e:
                 self.log.error(u"stalled: %s", e)
                 self.errors.add({'error': 'stalled',

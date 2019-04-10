@@ -6,16 +6,14 @@ import logging
 
 import datetime as dt
 
-import apps
-import config
-import reporting
-import tethering
-
-from tasklist import TaskList
-from device import Device, DeviceList, DeviceError
 from actools import cfgutil
 
-import resources
+from . import apps
+from . import tasks
+from . import config
+from . import tethering
+from . import resources
+from .device import Device, DeviceList, DeviceError
 
 """
 Manage and Automate iOS devices
@@ -25,7 +23,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.7.1"
+__version__ = "2.7.3"
 __all__ = ['DeviceManager', 'Stopped']
 
 # suppress "No handlers could be found" message
@@ -75,57 +73,28 @@ class Cache(object):
             self.devices.append(device)
 
 
-class Resources(object):
-
-    def __init__(self, root, directories):
-        self.path = root
-        self.domain = 'edu.utah.mlib.'
-        for d in directories:
-            path = os.path.join(root, d)
-            setattr(self, d.lower(), path)
-            if not os.path.isdir(path):
-                os.mkdir(path)
-
-    def __str__(self):
-        return self.path
-
-
 class DeviceManager(object):
     """
     Manage and automate iOS Devices
     """
-    def __init__(self, _id='edu.utah.mlib.ipad', logger=None, **kwargs):
-        self.log = logger if logger else logging.getLogger(__name__)
+    def __init__(self, *args, **kwargs):         
+        self.log = logging.getLogger(__name__)
         
         self.lock = config.FileLock('/tmp/ipadmanager', timeout=5)
-        self.config = config.Manager("{0}.manager".format(_id), **kwargs)
-        self.file = self.config.file
+        self.resources = resources.Resources(__name__)
         
-        # paths to various resources
-        resources = os.path.dirname(self.config.file)
-        r = ['Devices', 'Supervision', 'Images',
-             'Profiles', 'Logs', 'Apps']
-        self.resources = Resources(resources, r)
         self.images = self.resources.images
         self.profiles = self.resources.profiles
-        
-        try:
-            self.config.read()
-        except config.Error as e:
-            self.log.error("unable to read config: %s", e)
-            self.log.debug("creating default config")
-            self.config.write({'Reporting': {'Slack': {}},
-                               'Devices': [],
-                               'Idle': 300})
+        self.config = self.resources.config
+        self.file = self.config.file
         self.cache = Cache(self.config)
-        self.task = TaskList(_id, path=str(self.resources))
-        self.apps = apps.AppManager('apps')
+
+        self.task = tasks.TaskList()
+        self.apps = apps.AppManager()        
+
+        self.reporter = self.resources.reporter
         
-        _reporting = self.config.get('Reporting', {'Slack': {}})
-        self.log.debug("reporting: %r", _reporting)
-        self.reporter = reporting.reporterFromSettings(_reporting) 
-        
-        self.idle = self.config.setdefault('Idle', 300)
+        self.idle = self.resources.idle()
         
         cfgutil.log = os.path.join(self.resources.logs, 'cfgexec.log')  
         
@@ -1211,6 +1180,9 @@ class DeviceManager(object):
             except Stopped as e:
                 self.log.info(e)
                 return
+            except:
+                self.log.exception("unexpected error occurred")
+                raise
 
             # Finalization
             self.finalize()

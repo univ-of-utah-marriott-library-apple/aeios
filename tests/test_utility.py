@@ -96,7 +96,9 @@ class ParserTestCase(BaseTestCase):
         """
         assert Namespace(key='value') == {'key': 'value'}
         """
-        self.assertItemsEqual(vars(n), data)
+        ignored = ['verbose', 'debug', 'version']
+        namespace = {k: v for k, v in vars(n).items() if k not in ignored}
+        self.assertItemsEqual(namespace, data)
         
     def assertParsingFails(self, args):
         """

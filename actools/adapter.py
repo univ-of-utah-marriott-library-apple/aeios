@@ -443,6 +443,7 @@ def install_vpp_apps(udids, apps, recovery=None, hook=None, **kwargs):
                     hook(status)
             if status.alert:
                 if recovery:
+                    logger.debug(u"attempting to recover: %r", status.alert)
                     recovery(status.alert)
                 else:
                     raise status.alert

@@ -2,7 +2,8 @@
 
 import logging
 
-import config
+# import config
+from . import resources
 
 """
 Persistant Tasking Queue
@@ -12,7 +13,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright(c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.1.3"
+__version__ = "2.1.4"
 __all__ = ['TaskList']
 
 # suppress "No handlers could be found" message
@@ -35,20 +36,14 @@ def debug(fn):
 
 class TaskList(object):
 
-    def __init__(self, _id, **kwargs):
+    def __init__(self, *args, **kwargs):
         self.log = logging.getLogger(__name__)
-
-        self.config = config.Manager("{0}.tasks".format(_id), **kwargs)
-        self.file = self.config.file
+        self.resources = resources.Resources(__name__)
         self._taskkeys = ['erase', 'prepare', 'installapps']
-        try:
-            self.config.read()
-        except config.Missing as e:
-            self.log.debug("unable to read config: %s", e)
-            self.log.info("creating default task file: %r", self.file)
-            _tasks = {k: [] for k in self._taskkeys}
-            _tasks['queries'] = []
-            self.config.write(_tasks)
+        self.config = self.resources.config
+        self.file = self.config.file
+        if kwargs.has_key('timeout'):
+            self.config.lock.timeout = kwargs['timeout']
 
     @property
     def record(self):

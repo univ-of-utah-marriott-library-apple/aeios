@@ -123,7 +123,7 @@ def configure(resources, args):
     #> aeiosutil configure slack URL CHANNEL [--name NAME]
     if args.item == 'slack':
         data = {'URL': args.URL, 'channel': args.channel, 'name': args.name}
-        resources.reporting(data)
+        resources.reporting({'Slack': data})
         logger.info("successfully configured reporting")
     else:
         err = "{0!s}: unable to configure {1!r}".format(SCRIPT, args.item)

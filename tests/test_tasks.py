@@ -8,7 +8,8 @@ import plistlib
 import threading
 import datetime as dt
 
-from aeios import config, tasklist
+from aeios import config
+from aeios import tasks
 
 """
 Tests for aeios.tasklist
@@ -55,7 +56,7 @@ class BaseTestCase(unittest.TestCase):
     def setUp(self):
         self.id = 'edu.utah.mlib.ipad.tasks'
         self.path = self.__class__.path 
-        self.task = tasklist.TaskList(self.id, path=self.path)
+        self.task = tasks.TaskList()
         self.file = self.task.file
         self.ecids = ['0xAABBCCDDEEFF11', '0xAABBCCDDEEFF12']
         self.only = ['0xAABBCCDDEEFF13']

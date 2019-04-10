@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import logging
+
 from . import apps
 from . import config
 from . import reporting
@@ -9,7 +11,7 @@ from . import utility
 
 from .device import Device, DeviceList
 from .devicemanager import DeviceManager, Stopped
-from .tasklist import TaskList
+from .tasks import TaskList
 
 """
 Automated Enterprise iOS
@@ -21,7 +23,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.8.3"
+__version__ = "2.8.5"
 __all__ = [
     'apps',
     'Device',

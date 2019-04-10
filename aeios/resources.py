@@ -7,29 +7,18 @@ from . import config
 from . import reporting
 
 """
-Shared resources for aeios
+Shared resources and defaults for aeios
 """
 
 __author__ = "Sam Forester"
 __email__ = "sam.forester@utah.edu"
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = '1.0.1'
+__version__ = "1.0.3"
 __all__ = []
-
 
 # suppress "No handlers could be found" message
 logging.getLogger(__name__).addHandler(logging.NullHandler())
-
-# logging2 = {'debug': {'level': logging.DEBUG,
-#                       'format': ('%(asctime)s %(process)d: %(levelname)6s: '
-#                                  '%(name)s - %(funcName)s(): %(message)s')},
-#             'verbose': {'level': logging.INFO,
-#                         'format': '%(asctime)s %(levelname)6s: %(message)s'}}
-        
-# logging = {'level': logging.DEBUG,
-#            'format': ('%(asctime)s %(process)d: %(levelname)6s: '
-#                       '%(name)s - %(funcName)s(): %(message)s')}
 
 DOMAIN = 'edu.utah.mlib'
 PATH = os.path.expanduser('~/Library/aeios')
@@ -95,12 +84,12 @@ class Defaults(object):
         return {'Slack': {}}
 
     @property
-    def manager(self):
-        return {}
+    def devicemanager(self):
+        return {'Devices': [], 'loadBalancing': 5}
     
     @property
     def devices(self):
-        return {'Devices': []}
+        return {}
     
     @property
     def path(self):
@@ -151,6 +140,7 @@ class Resources(object):
         """            
         """
         self.log = logging.getLogger(__name__ + '.Resources')
+        self.log.debug("getting resources: %r", name)
         self.path = path if path else PATH
         if name:
             self.domain = "{0}.{1}".format(DOMAIN, name)

@@ -8,7 +8,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright(c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 __all__ = [
     'SlackSender',
     'Reporter',
@@ -90,7 +90,7 @@ def reporterFromSettings(info):
     try:
         _slack = info['Slack']
         name = _slack.get('name')
-        return Slack(_slack['url'], _slack['channel'], name)
+        return Slack(_slack['URL'], _slack['channel'], name)
     except KeyError as e:
         logger.error("missing key: %s", e)
         logger.debug("returning NullReporter()")

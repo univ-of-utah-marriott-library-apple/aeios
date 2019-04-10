@@ -8,20 +8,15 @@
 	<array>
 		<string>Aqua</string>
 	</array>
-	<key>RunAtLoad</key>
+	<key>KeepAlive</key>
 	<true/>
 	<key>Label</key>
-	<string>edu.utah.mlib.ipad.checkout</string>
+	<string>edu.utah.mlib.aeios.ipad.checkout</string>
 	<key>Program</key>
 	<string>/usr/local/bin/checkout_ipads.py</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>checkout_ipads.py</string>
-		<string>daemon</string>
 	</array>
-	<key>StandardOutPath</key>
-	<string>/tmp/checkout_ipad.log</string>
-	<key>StandardErrorPath</key>
-	<string>/tmp/checkout_ipad.log</string>
 </dict>
 </plist>

@@ -1,70 +1,70 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import sys
 import os
-import subprocess
+import sys
 import time
 import signal
+import subprocess
 import logging
+import logging.config
 
 import aeios
-from management_tools import loggers
 
-'''Automate the management of iOS devices 
-'''
+# should be replaced with `aeiosutil start`
+"""
+Run aeios Automation
+"""
 
 __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
-__copyright__ = ('Copyright (c) 2019 '
-                 'University of Utah, Marriott Library')
+__copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = '2.1.1'
-__url__ = None
-__description__ = 'Automate the management of Checkout iOS devices'
+__version__ = '2.2.1'
 
-## CHANGE LOG:
-# 2.0.1:
-#  - fixed a bug causing daemon to stop
-# 2.0.2:
-#  - modified default location for files
-# 2.0.3:
-#  - removed encoded quotes added by TextEdit.app
-# 2.0.4:
-#  - removed manager.run() from checkin() (handled by DeviceManager)
-#  - moved adjust_logger_format()
-# 2.0.5:
-#  - fixed bug that would cause the daemon to quit if a device was erased
-# 2.0.6:
-#  - added additional exception handling in daemon()
-#  - fixed NameError with StoppedError
-# 2.0.7:
-#  - changed StoppedError to Stopped
-# 2.0.8:
-#  - changed verification
-# 2.0.9:
-#  - added cfgutil check in daemon()
+SCRIPT = os.path.basename(__file__)
 
-# 2.1.0:
-#  - modified library name 'ipadmanager' now aeois
-#  - changed daemon() to run()
-#  - removed 'daemon' flag 
-#  - run() is now the default action
-#  - manager now instantiated in main()
-#  - removed refresh, attached, and detached:
-#       - attached(): manager.checkin()
-#       - detached(): manager.checkout()
-#       - refresh(): manager.verify()
-#  - changed working directory to:
-#       'Application Support/Checkout iPads'
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '%(name)s: %(funcName)s: %(message)s'
+        },
+        'precise': {
+            'format': ('%(asctime)s %(process)d: %(levelname)8s: %(name)s '
+                       '- %(funcName)s(): line:%(lineno)d: %(message)s')
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+            'stream': 'ext://sys.stderr'
+        },
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'formatter': 'precise',
+            'when': 'midnight',
+            'encoding': 'utf8',
+            'backupCount': 5,
+            'filename': None,
+        },
+    },
+    'root': {
+        'level': 'DEBUG',
+        'handlers': ["file", "console"]
+    }
+}
 
-# 2.1.1:
-#   - updated logging
 
 class SignalTrap(object):
-    '''Class for trapping interruptions in an attempt to shutdown
+    """
+    Class for trapping interruptions in an attempt to shutdown
     more gracefully
-    '''
+    """
     def __init__(self, logger):
         self.stopped = False
         self.log = logger
@@ -77,13 +77,17 @@ class SignalTrap(object):
         self.log.debug("received signal: {0}".format(signum))
         self.stopped = True
 
-## DEVICE ACTIONS
 
-def run(manager, logger):
-    '''Attempt at script level recursion and daemonization
+# DEVICE ACTIONS
+
+def run(manager):
+    """
+    Attempt at script level recursion and daemonization
     Benefits, would reduce the number of launchagents and the 
     Accessiblity access
-    '''
+    """
+    logger = logging.getLogger(SCRIPT)
+    logger.info("starting automation")
     # start up cfgutil exec with this script as the attach and detach
     # scriptpath 
     # FUTURE: controller.monitor()
@@ -91,17 +95,19 @@ def run(manager, logger):
              '-a', "{0} attached".format(sys.argv[0]),
              '-d', "{0} detached".format(sys.argv[0])]
     try:
+        logger.debug("> %s", " ".join(cmd))
         p = subprocess.Popen(cmd, stderr=subprocess.PIPE)
     except OSError as e:
         if e.errno == 2:
             err = 'cfgutil missing... install automation tools'
             logger.error(err)
             raise SystemExit(err)
+        logger.critical("unable to run command: %s", e, exc_info=True)
         raise
         
     if p.poll() is not None:
-        err = "{0}".format(p.communicate()[1])
-        logger.error(err.rstrip())
+        err = "{0}".format(p.communicate()[1]).rstrip()
+        logger.error(err)
         raise SystemExit(err)
 
     sig = SignalTrap(logger)
@@ -122,49 +128,36 @@ def run(manager, logger):
                 logger.info("manager was stopped")
             except Exception as e:
                 logger.exception("unexpected error occurred")
-    ## terminate the cfutil command
+    # terminate the cfutil command
     p.kill()
+    logger.info("finished")
 
-def adjust_logger_format(logger, pid):
-    '''Add the PID to the logger
-    '''
-    nfmt = '%(asctime)s {0}: %(levelname)s: %(message)s'.format(pid)
-    formatter = logging.Formatter(nfmt)
-    handler = logger.handlers[0]
-    handler.setFormatter(formatter)
 
 def main():
-    script = os.path.basename(sys.argv[0])
-    scriptname = os.path.splitext(script)[0]
-    # logger = loggers.StreamLogger(name=scriptname, level=loggers.DEBUG)
-    # logger = loggers.FileLogger(name=scriptname, level=loggers.DEBUG)
-
-    fmt = ('%(asctime)s %(process)d: %(levelname)6s: '
-           '%(name)s - %(funcName)s(): %(message)s')
-    logging.basicConfig(level=logging.DEBUG, format=fmt)
-    logger = logging.getLogger(script)
-    logging.getLogger('actools.cfgutil').setLevel(logging.INFO)
-    logging.getLogger('aeios.reporting').setLevel(logging.INFO)
-    logging.getLogger('aeios.device').setLevel(logging.ERROR)
+    resources = aeios.resources.Resources()
+    logfile = os.path.join(resources.logs, "checkout_ipads.log")
+    LOGGING['handlers']['file']['filename'] = logfile
+    logging.config.dictConfig(LOGGING)
+    logger = logging.getLogger(SCRIPT)
     
-    logger.debug("{0} started".format(script))
+    logger.debug("started")
+    
+    logger.debug("loading DeviceManager")
+    manager = aeios.DeviceManager()
 
-    app_support = os.path.expanduser('~/Library/Application Support')
-    resources = os.path.join(app_support, 'Checkout iPads')
-    manager = aeios.DeviceManager('edu.utah.mlib.ipad.checkout', 
-                                  path=resources)
     try:
         action = sys.argv[1]
     except IndexError:
-        run(manager, logger)        
-        logger.debug("%s: run finished", script)
+        run(manager)
         sys.exit(0)
-
+    
     # get the iOS Device environment variables set by `cfgutil exec`
     env_keys = ['ECID', 'deviceName', 'bootedState', 'deviceType',
                 'UDID', 'buildVersion', 'firmwareVersion', 'locationID']
     info = {k:os.environ.get(k) for k in env_keys}
-
+    
+    logger.debug("performing action: %s", action)
+    
     if action == 'attached':
         manager.checkin(info)
     elif action == 'detached':
@@ -175,9 +168,7 @@ def main():
         err = "invalid action: {0}".format(action)
         logger.error(err)
         raise SystemExit(err)
-    
-    logger.debug("%s: %s", script, action)
-    sys.exit(0)
+
 
 if __name__ == '__main__':
     main()
