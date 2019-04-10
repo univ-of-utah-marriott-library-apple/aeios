@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import os
-import subprocess
 import json
 import stat
-import inspect
 import logging
+import subprocess
 
 """
 Execute commands with `cfgutil`
@@ -15,7 +14,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.5.0"
+__version__ = "2.5.1"
 
 # suppress "No handlers could be found" message
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -25,12 +24,23 @@ CFGUTILBIN = '/usr/local/bin/cfgutil'
 # record raw execution info (cfgutil.log = '/path/to/execution.log')
 log = None
 
-# TO-DO: this was a mistake (I need to move this all to CfgutilError)
-class Error(Exception):
 
+class Error(Exception):
+    pass
+    
+
+class AuthenticationError(Error):
+    """
+    Raised when incorrect Authentication was provided
+    OR when Authentication required and None or incorrect
+    """
+    pass
+
+
+class CfgutilError(Error):
+    '''Raised when execution of cfgutil partially fails
+    '''
     def __init__(self, info, msg='', cmd=None):
-        if not cmd:
-            cmd = inspect.stack()[1][3]
         self.command = info.get('Command', cmd)
         self.message = info.get('Message', msg)
         self.code = info.get('Code', 61) # ENODATA: 'No data available'
@@ -57,28 +67,15 @@ class Error(Exception):
         return _repr.format(__name__, 'Error', id(self), _dict)
 
 
-class FatalError(Error):
+class FatalError(CfgutilError):
     """
     Raised when execution of cfgutil completely fails
     """
     pass
-
-
-class AuthenticationError(Exception):
-    """
-    Raised when incorrect Authentication was provided
-    OR when Authentication required and None or incorrect
-    """
-    pass
-
-
-class CfgutilError(Error):
-    '''Raised when execution of cfgutil partially fails
-    '''
-    pass
-    
+   
 
 class Result(object):
+
     def __init__(self, cfgout, ecids=(), err=(), cmd=()):
         self._output = cfgout
         self.cmdargs = cmd
@@ -390,7 +387,7 @@ def cfgutil(command, ecids, args, auth=None):
         raise CfgutilError(cfgout, 'Unknown error', command)
     elif _type is None:
         # TO-DO: remove (this shouldn't happen ever)
-        raise Error(cfgout, 'unexpected output type', command)
+        raise CfgutilError(cfgout, 'unexpected output type', command)
 
     return Result(cfgout, ecids, cmd)
 
