@@ -16,7 +16,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 
 # name of this script
 SCRIPT = os.path.basename(sys.argv[0])
@@ -50,6 +50,8 @@ def add(resources, args):
 
     #> aeiosutil add app "app name"
     elif args.item == 'app':
+        if not args.name:
+            raise SystemExit("must specify app name")
         logger.debug(u"adding app: '%s'", args.name)
         manager = aeios.apps.AppManager().add('all-iPads', args.name)
         logger.info(u"added app to automation: '%s'", args.name)
