@@ -12,17 +12,17 @@ from aeios import config
 from aeios import tasks
 
 """
-Tests for aeios.tasklist
+Tests for aeios.tasks
 """
 
 __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2012 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 # location for temporary files created with tests
-TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp', 'tasklist')
+TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp', 'tasks')
 
 def setUpModule():
     """
@@ -565,8 +565,8 @@ class TestThreaded(BaseTestCase):
     """
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.task2 = tasklist.TaskList(self.id, path=self.path)
-        self.task3 = tasklist.TaskList(self.id, path=self.path)
+        self.task2 = tasks.TaskList(self.id, path=self.path)
+        self.task3 = tasks.TaskList(self.id, path=self.path)
         
     def test_threaded_add_get_list_repeat(self):
         """
@@ -623,7 +623,7 @@ class TestLocking(BaseTestCase):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.task = tasklist.TaskList(self.id, path=self.path, timeout=0)
+        self.task = tasks.TaskList(self.id, path=self.path, timeout=0)
         self.lock = config.FileLock(self.task.config.lockfile, timeout=1)
         
     def test_device_locked(self):
