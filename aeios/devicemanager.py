@@ -23,7 +23,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.7.3"
+__version__ = "2.7.4"
 __all__ = ['DeviceManager', 'Stopped']
 
 # suppress "No handlers could be found" message
@@ -40,6 +40,10 @@ class Stopped(Error):
     """
     def __str__(self):
         return "STOPPED: " + str(self.message)
+
+
+class SkipSupervision(Error):
+    pass
 
 
 class CacheError(Error):
@@ -100,6 +104,7 @@ class DeviceManager(object):
         
         self.auth = None
         self._install_local_apps = False
+        self._skip_supervision = False
 
     @property
     def running(self):
@@ -691,9 +696,15 @@ class DeviceManager(object):
         try:
             self.check_network(tasked, tethered=True)
         except tethering.Error:
-            self.log.error("unable to use tethering")
-            self.check_network(tasked, tethered=False)
-    
+            self.log.error("unable to use tethering")            
+            #TO-DO: a nested try always needs to be re-thought
+            try:
+                self.check_network(tasked, tethered=False)
+            except cfgutil.Error as e:
+                err = "unable to supervise: {0!s}: {1!s}".format(tasked, e)
+                self.log.error(err)
+                raise SkipSupervision(err)
+            
         prepared, failed = [], []
         try:
             self.log.info("preparing devices: %s", tasked)
@@ -720,9 +731,9 @@ class DeviceManager(object):
                 self.log.error(e.detail)
                 raise
 
-        except Exception:
-            self.log.exception("unexpected error occurred")
-            raise
+        except cfgutil.Error as e:
+            self.log.error("supervision failed: %s: %s", tasked, e)
+            failed = tasked
 
         finally:
             if failed:
@@ -1042,7 +1053,7 @@ class DeviceManager(object):
                 # raise Stopped("verification")
                 self.log.info("verification stopped")
                 return
-
+            
             # not sure what this does anymore, but removing it created
             # some odd behaviour
             last_run = self.config.get('finished')
@@ -1175,7 +1186,10 @@ class DeviceManager(object):
             # Automation
             try:
                 self.erase(devices)
-                self.supervise(devices)
+                try:
+                    self.supervise(devices)
+                except SkipSupervision:
+                    self.log.info("supervision skipped")
                 self.installapps(devices)
             except Stopped as e:
                 self.log.info(e)
@@ -1186,7 +1200,7 @@ class DeviceManager(object):
 
             # Finalization
             self.finalize()
-            self.log.info("automation finished")
+            self.log.info("finished")
 
 
 if __name__ == '__main__':
