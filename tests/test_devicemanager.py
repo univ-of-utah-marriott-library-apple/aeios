@@ -18,7 +18,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright(c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 # suppress "No handlers could be found" message
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -137,6 +137,8 @@ class BaseTestCase(unittest.TestCase):
                     'deviceType': 'iPad7,5',
                     'firmwareVersion': '11.4.1',
                     'locationID': '0x00000010'}]
+        for d in cls.env:
+            d['managed'] = True
         
     @classmethod
     def tearDownClass(cls):

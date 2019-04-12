@@ -14,7 +14,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.7.0"
+__version__ = "2.8.0"
 __all__ = ['Device', 'DeviceError', 'DeviceList']
 
 # suppress "No handlers could be found" message
@@ -107,6 +107,15 @@ class DeviceList(list):
             return sorted(self.ecids) == sorted(x.ecids)
         else:
             return False
+
+    def __ne__(self, x):
+        return not self == x 
+
+    def __contains__(self, device):
+        """
+        x.__contains__(y) <==> y.ecid in x.ecids
+        """
+        return device.ecid in self.ecids
 
 
 class Device(object):
@@ -275,6 +284,16 @@ class Device(object):
     @enrolled.setter
     def enrolled(self, timestamp):
         self._timestamp('enrolled', timestamp)
+
+    @property
+    def managed(self):
+        return self.config.get('managed', False)
+
+    @managed.setter
+    def managed(self, timestamp):
+        if not isinstance(value, bool):
+            raise TypeError('not boolean: {0}'.format(value))
+        self.config.update({'managed': value})
 
     @property
     def checkin(self):

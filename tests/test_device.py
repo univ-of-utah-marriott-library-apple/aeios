@@ -21,7 +21,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.4"
+__version__ = "1.1.0"
 
 # location for temporary files created with tests
 LOCATION = os.path.join(os.path.dirname(__file__))
@@ -726,7 +726,7 @@ class TestDeviceLocked(unittest.TestCase):
             self.device.locked = True
 
 
-class TestThreaded(unittest.TestCase):
+class TestDeviceThreading(unittest.TestCase):
     """
     Tests involving threading
     """
@@ -768,7 +768,7 @@ class TestThreaded(unittest.TestCase):
         self.assertEquals(self.device.name, 'd3')
 
 
-class TestLocking(unittest.TestCase):
+class TestDeviceLocking(unittest.TestCase):
 
     def setUp(self):
         cls = self.__class__
@@ -784,7 +784,56 @@ class TestLocking(unittest.TestCase):
         with self.lock.acquire():
             with self.assertRaises(device.DeviceError):
                 d = device.Device(self.ecid, path=self.dir, timeout=0)
+
+
+class DeviceListTest(unittest.TestCase):
+
+    def setUp(self):
+        self.dir = os.path.join(TMPDIR, 'list')
+        self.data = [{'ECID': '0x123456789ABCD0',
+                      'UDID': 'a0111222333444555666777888999abcdefabcde',
+                      'bootedState': 'Booted',
+                      'buildVersion': '15G77',
+                      'deviceName': 'test-ipad-1',
+                      'deviceType': 'iPad7,5',
+                      'firmwareVersion': '11.4.1',
+                      'locationID': '0x00000001'},
+                     {'ECID': '0x123456789ABCD1',
+                      'UDID': 'a1111222333444555666777888999abcdefabcde',
+                      'bootedState': 'Booted',
+                      'buildVersion': '15G77',
+                      'deviceName': 'test-ipad-2',
+                      'deviceType': 'iPad7,5',
+                      'firmwareVersion': '11.4.1',
+                      'locationID': '0x00000002'},
+                     {'ECID': '0x123456789ABCD2',
+                      'UDID': 'a2111222333444555666777888999abcdefabcde',
+                      'bootedState': 'Booted',
+                      'buildVersion': '15G77',
+                      'deviceName': 'test-ipad-3',
+                      'deviceType': 'iPad7,5',
+                      'firmwareVersion': '11.4.1',
+                      'locationID': '0x00000003'}]
+        self.devices = []
+        for info in self.data:
+            d = device.Device(info['ECID'], info, path=self.dir)
+            self.devices.append(d)
         
+        self.devicelist = device.DeviceList(self.devices)
+
+    def test_type(self):
+        self.assertIsInstance(self.devicelist, device.DeviceList)
+
+    def test_contains_object(self):
+        for d in self.devices:
+            self.assertTrue(d in self.devicelist)
+
+    def test_contains_identical(self):
+        data = self.data[0]
+        identical = device.Device(data['ECID'], data, path=self.dir)
+        self.assertIsNot(identical, self.devices[0])
+        self.assertTrue(identical in self.devicelist)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=1)

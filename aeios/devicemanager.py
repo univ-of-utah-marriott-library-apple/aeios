@@ -10,6 +10,7 @@ from actools import cfgutil
 
 from . import apps
 from . import tasks
+from . import prompt
 from . import config
 from . import tethering
 from . import resources
@@ -23,7 +24,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.7.4"
+__version__ = "2.8.0"
 __all__ = ['DeviceManager', 'Stopped']
 
 # suppress "No handlers could be found" message
@@ -43,6 +44,10 @@ class Stopped(Error):
 
 
 class SkipSupervision(Error):
+    pass
+
+
+class Skip(Error):
     pass
 
 
@@ -102,9 +107,9 @@ class DeviceManager(object):
         
         cfgutil.log = os.path.join(self.resources.logs, 'cfgexec.log')  
         
+        self._ignored = self.config.setdefault('IgnoredDevices', [])
         self.auth = None
         self._install_local_apps = False
-        self._skip_supervision = False
 
     @property
     def running(self):
@@ -384,6 +389,17 @@ class DeviceManager(object):
         
         return enabled
 
+    def ignore(self, device):
+        self.log.info("ignoring device: %s", device)
+        if not self.ignored(device):
+            self.config.add('IgnoredDevices', device.ecid)
+            self._ignored.append(device.ecid)
+        else:
+            self.log.debug("device already ignored: %s", device)
+            
+    def ignored(self, device):
+        return device.ecid in self._ignored
+
     def checkin(self, info, run=True):
         """
         Process attached device
@@ -399,14 +415,36 @@ class DeviceManager(object):
         # TO-DO:
         # validate checkin (currently done by need_to_erase())
         # - invalid:
-        #       unmanaged, restarting,
-        
-        if not self.managed(device):
-            # TO-DO: add mechanism to prompt for device management
-            self.log.info("ignoring unmanaged device: %s", device)
+        #       unmanaged,
+
+        # automatically return if device is ignored
+        if self.ignored(device):
+            # raise Skip("ignored: {0!s}".format(device))
+            self.log.info("ignored: %s", device)
             return
+
+        # Prompt user for 
+        if not self.managed(device):
+            try:
+                choice = prompt.automation(device)
+            except prompt.Cancelled:
+                # raise Skip("management prompt cancelled")
+                self.log.info("user cancelled automation: %s", device)
+                return
+                
+            if choice == 'Ignore':
+                self.ignore(device)
+                # raise Skip("device was ignored: {0!s}".format(device))
+                return
+            elif choice == 'Erase':
+                self.manage(device)
+                self.task.erase([device.ecid])
+            else:
+                err = "unsupported choice: {0!r}".format(choice)
+                self.log.error(err)
+                raise Error(err)
         else:
-            self.log.debug("%s: managed", device)
+            self.log.debug("%s: is managed", device)
         
         if self.stopped:
             # mechanism to stall while devices restart
@@ -439,6 +477,11 @@ class DeviceManager(object):
         device = self.device(info['ECID'], info)
         _cache = [d for d in self.cache.listed if d['ECID'] != device.ecid]
         self.cache.listed = _cache
+        
+        if self.ignore(device):
+            self.log.info("checkout ignored: %s", device)
+            return
+            
         # IDEA: could just return if self.stopped (would eliminate need
         #       for device restart tracking)
 
