@@ -12,7 +12,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __all__ = ['Button', 'Prompt', 'Cancelled', 'confirm', 'ignore', 'automation']
 
 # suppress "No handlers could be found" message
@@ -139,7 +139,7 @@ def confirm(device):
     details = ('This device will be automatically erased each time it'
                ' is connected to this system.\n\n'
                'This cannot be undone.')
-    buttons = (Button("Cancel"), Button("Erase"))
+    buttons = (Button("Cancel", default=True), Button("Erase"))
 
     prompt = Prompt(message, details, buttons)
 
