@@ -362,6 +362,7 @@ class Manager(object):
                 for i in value:
                     if i not in data[key]:
                         data[key].append(i)
+            # TO-DO: Is there a reason I'm catching KeyError specifically?
             except:
                 data[key].append(value)
             self.write(data)
