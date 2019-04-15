@@ -24,7 +24,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.8.0"
+__version__ = "2.8.2"
 __all__ = ['DeviceManager', 'Stopped']
 
 # suppress "No handlers could be found" message
@@ -392,13 +392,12 @@ class DeviceManager(object):
     def ignore(self, device):
         self.log.info("ignoring device: %s", device)
         if not self.ignored(device):
-            self.config.add('IgnoredDevices', device.ecid)
-            self._ignored.append(device.ecid)
+            self.config.add('IgnoredDevices', [device.ecid])
         else:
             self.log.debug("device already ignored: %s", device)
             
     def ignored(self, device):
-        return device.ecid in self._ignored
+        return device.ecid in self.config.setdefault('IgnoredDevices', [])
 
     def checkin(self, info, run=True):
         """
@@ -420,31 +419,35 @@ class DeviceManager(object):
         # automatically return if device is ignored
         if self.ignored(device):
             # raise Skip("ignored: {0!s}".format(device))
+            self.task.remove([device.ecid])
             self.log.info("ignored: %s", device)
             return
 
-        # Prompt user for 
-        if not self.managed(device):
-            try:
-                choice = prompt.automation(device)
-            except prompt.Cancelled:
-                # raise Skip("management prompt cancelled")
-                self.log.info("user cancelled automation: %s", device)
-                return
+        # Prompt user for device management
+        # NOTE: this might lock things up, but I don't want verification to sneak
+        #       around it
+        with self.lock.acquire(timeout=-1):
+            if not self.managed(device):
+                try:
+                    choice = prompt.automation(device)
+                except prompt.Cancelled:
+                    # raise Skip("management prompt cancelled")
+                    self.log.info("user cancelled automation: %s", device)
+                    return
                 
-            if choice == 'Ignore':
-                self.ignore(device)
-                # raise Skip("device was ignored: {0!s}".format(device))
-                return
-            elif choice == 'Erase':
-                self.manage(device)
-                self.task.erase([device.ecid])
+                if choice == 'Ignore':
+                    self.ignore(device)
+                    # raise Skip("device was ignored: {0!s}".format(device))
+                    return
+                elif choice == 'Erase':
+                    self.manage(device)
+                    self.task.erase([device.ecid])
+                else:
+                    err = "unsupported choice: {0!r}".format(choice)
+                    self.log.error(err)
+                    raise Error(err)
             else:
-                err = "unsupported choice: {0!r}".format(choice)
-                self.log.error(err)
-                raise Error(err)
-        else:
-            self.log.debug("%s: is managed", device)
+                self.log.debug("%s: is managed", device)
         
         if self.stopped:
             # mechanism to stall while devices restart
@@ -478,8 +481,9 @@ class DeviceManager(object):
         _cache = [d for d in self.cache.listed if d['ECID'] != device.ecid]
         self.cache.listed = _cache
         
-        if self.ignore(device):
+        if self.ignored(device):
             self.log.info("checkout ignored: %s", device)
+            self.task.remove([device.ecid])
             return
             
         # IDEA: could just return if self.stopped (would eliminate need
