@@ -14,7 +14,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.8.0"
+__version__ = "2.8.1"
 __all__ = ['Device', 'DeviceError', 'DeviceList']
 
 # suppress "No handlers could be found" message
@@ -290,7 +290,7 @@ class Device(object):
         return self.config.get('managed', False)
 
     @managed.setter
-    def managed(self, timestamp):
+    def managed(self, value):
         if not isinstance(value, bool):
             raise TypeError('not boolean: {0}'.format(value))
         self.config.update({'managed': value})
