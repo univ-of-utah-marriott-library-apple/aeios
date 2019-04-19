@@ -22,7 +22,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 LOCATION = os.path.dirname(__file__)
 TMPDIR = os.path.join(LOCATION, 'tmp')
-DATA = os.path.join(TMPDIR, 'apps')
+# DATA = os.path.join(TMPDIR, 'apps')
 TMP = os.path.join(TMPDIR, 'apps')
 PREFERENCES = os.path.join(TMP, 'Preferences')
 
@@ -47,11 +47,11 @@ def tearDownModule():
     """
     remove tmp directory
     """
-    try:
-        shutil.rmtree(TMPDIR)
-    except OSError as e:
-        if e.errno == 2:
-            pass
+    # try:
+    shutil.rmtree(TMPDIR)
+    # except OSError as e:
+    #     if e.errno == 2:
+    #         pass
 
 
 class BaseTestCase(unittest.TestCase):

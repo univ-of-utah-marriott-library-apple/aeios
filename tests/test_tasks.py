@@ -22,14 +22,15 @@ __license__ = 'MIT'
 __version__ = "1.0.3"
 
 # location for temporary files created with tests
-TMPDIR = os.path.join(os.path.dirname(__file__), 'tmp', 'tasks')
+TMP = os.path.join(os.path.dirname(__file__), 'tmp')
+TMPDIR = os.path.join(TMP, 'tasks')
 
 def setUpModule():
     """
     create tmp directory
     """
     try:
-        os.mkdir(TMPDIR)
+        os.makedirs(TMPDIR)
     except OSError as e:
         if e.errno != 17:
             raise
@@ -38,7 +39,7 @@ def tearDownModule():
     """
     remove tmp directory
     """
-    shutil.rmtree(TMPDIR)
+    shutil.rmtree(TMP)
 
 
 class BaseTestCase(unittest.TestCase):

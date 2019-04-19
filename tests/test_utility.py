@@ -98,7 +98,7 @@ class ParserTestCase(BaseTestCase):
         """
         ignored = ['verbose', 'debug', 'version']
         namespace = {k: v for k, v in vars(n).items() if k not in ignored}
-        self.assertItemsEqual(namespace, data)
+        self.assertDictEqual(namespace, data)
         
     def assertParsingFails(self, args):
         """
@@ -521,6 +521,49 @@ class TestConfigureSlack(ParserTestCase):
         args = ('configure', 'slack', self.url, self.channel, 
                 '--name', self.name, 'EXTRA')
         self.assertParsingFails(args)
+
+
+class TestStartandStopParser(ParserTestCase):
+    
+    def setUp(self):
+        ParserTestCase.setUp(self)
+            
+    def test_start(self):
+        """
+        test subcommand: `start`
+        """
+        args = ('start',)
+        expected = {'cmd': 'start', 'login': None}
+        result = self.parser.parse(args)
+        self.assertNamespace(result, expected)
+
+    def test_start_login(self):
+        """
+        test `start --login` parses
+        """
+        args = ('start', '--login')
+        expected = {'cmd': 'start', 'login': False}
+        result = self.parser.parse(args)
+        self.assertNamespace(result, expected)
+
+    def test_stop(self):
+        """
+        test subcommand: `stop`
+        """
+        args = ('stop',)
+        expected = {'cmd': 'stop', 'login': None}
+        result = self.parser.parse(args)
+        self.assertNamespace(result, expected)
+
+    def test_stop_login(self):
+        """
+        test `stop --login` parses
+        """
+        args = ('stop', '--login')
+        expected = {'cmd': 'stop', 'login': True}
+        result = self.parser.parse(args)
+        self.assertNamespace(result, expected)
+
 
 
 class TestModifications(BaseTestCase):

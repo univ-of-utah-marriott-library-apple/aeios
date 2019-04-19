@@ -19,7 +19,8 @@ __version__ = "1.0.0"
 
 LOCATION = os.path.dirname(__file__)
 DATA = os.path.join(LOCATION, 'data', 'resources')
-TMPDIR = os.path.join(LOCATION, 'tmp', 'resources')
+TMP = os.path.join(LOCATION, 'tmp')
+TMPDIR = os.path.join(TMP, 'resources')
 
 
 def setUpModule():
