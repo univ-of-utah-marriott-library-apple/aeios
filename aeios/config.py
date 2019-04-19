@@ -5,7 +5,7 @@ import logging
 import fcntl
 import threading
 import time
-import xml
+import xml.parsers.expat
 
 """
 Persistant Configuration
@@ -15,7 +15,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 # suppress "No handlers could be found" message
 logging.getLogger(__name__).addHandler(logging.NullHandler())
