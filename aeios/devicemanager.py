@@ -24,7 +24,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "2.8.2"
+__version__ = "2.8.3"
 __all__ = ['DeviceManager', 'Stopped']
 
 # suppress "No handlers could be found" message
@@ -141,7 +141,7 @@ class DeviceManager(object):
         self.log.debug("stopping for %s", _reason)
         raise Stopped(_reason)
 
-    def managed(self, device):
+    def isManaged(self, device):
         """
         Placeholder for future management check
 
@@ -291,7 +291,7 @@ class DeviceManager(object):
         self.log.info("%s: checking erase", device)
 
         # device is not managed (don't erase)
-        if not self.managed(device):
+        if not self.isManaged(device):
             self.log.debug("%s: not managed", device)
             return False
 
@@ -396,8 +396,12 @@ class DeviceManager(object):
         else:
             self.log.debug("device already ignored: %s", device)
             
-    def ignored(self, device):
-        return device.ecid in self.config.setdefault('IgnoredDevices', [])
+    def ignored(self, device=None):
+        _ignored_ecids = self.config.setdefault('IgnoredDevices', [])
+        if device:
+            return device.ecid in _ignored_ecids
+        else:
+            return _ignored_ecids
 
     def checkin(self, info, run=True):
         """
@@ -427,7 +431,7 @@ class DeviceManager(object):
         # NOTE: this might lock things up, but I don't want verification to sneak
         #       around it
         with self.lock.acquire(timeout=-1):
-            if not self.managed(device):
+            if not self.isManaged(device):
                 try:
                     choice = prompt.automation(device)
                 except prompt.Cancelled:
@@ -644,14 +648,23 @@ class DeviceManager(object):
         """
         # get subset of device ECIDs that need to be erased
         tasked_ecids = self.task.erase(only=targets.ecids)
-        
         if not tasked_ecids:
             self.log.info("no devices need to be erased")
             return
 
+        # get subset of managed ECIDs that need to be erased
+        managed_ecids = [e for e in tasked_ecids if e not in self.ignored()]
+        if not managed_ecids:
+            self.log.debug("ignored ecids tasked for erase: %r", tasked_ecids)
+            self.log.info("skipping ignored devices")
+            return
+
         # update device record before erase (or will count as checkout)
-        tasked = self.devices(tasked_ecids)
+        tasked = self.devices(managed_ecids)
         for device in tasked:
+            if self.ignored(device):
+                self.log.error("ignored device was tasked for erase")
+                continue
             self.log.debug("erase: found device: %s", device)
             device.restarting = True
             device.delete('erased')
@@ -738,8 +751,15 @@ class DeviceManager(object):
             self.log.info("no devices need to be supervised")
             return
 
+        # get subset of managed ECIDs that need to be erased
+        managed_ecids = [e for e in tasked_ecids if e not in self.ignored()]
+        if not managed_ecids:
+            self.log.debug("ignored ecids tasked for erase: %r", tasked_ecids)
+            self.log.info("skipping ignored devices")
+            return
+
         # make sure device network checks out
-        tasked = self.devices(tasked_ecids)
+        tasked = self.devices(managed_ecids)
         try:
             self.check_network(tasked, tethered=True)
         except tethering.Error:
@@ -849,7 +869,15 @@ class DeviceManager(object):
         if not tasked_ecids:
             self.log.debug("no devices tasked for app installation")
             return
-        tasked = self.devices(tasked_ecids)
+
+        # get subset of managed ECIDs that need to be erased
+        managed_ecids = [e for e in tasked_ecids if e not in self.ignored()]
+        if not managed_ecids:
+            self.log.debug("ignored ecids: %r", tasked_ecids)
+            self.log.info("skipping ignored devices")
+            return
+
+        tasked = self.devices(managed_ecids)
 
         # Hacky hook (until something better can be figured out)
         if self._install_local_apps:
@@ -985,8 +1013,9 @@ class DeviceManager(object):
         """
         self.log.debug("running significant verification")
         
-        # get all available devices
-        available = self.available()
+        # get all available, managed devices
+        available = DeviceList([d for d in self.available() if d.managed])
+
         # Re-query supervision and apps on all available devices
         self.task.query('installedApps', available.ecids)
         self.task.query('isSupervised', available.ecids)
@@ -999,15 +1028,9 @@ class DeviceManager(object):
             _verified = True
             self.log.info("verifying: %s", device)
             
-            # Fix device restart (handled by device)
-            # checkin = now - device.checkin
-            # if device.restarting and checkin > dt.timedelta(seconds=300):
-            #     self.log.error('%s: incorrectly restarting', device)
-            #     device.restarting = False
-
             # verify device Serial Number
             if not device.serialnumber:
-                device.verified = False
+                _verified = False
                 self.log.error('%s: missing serial number', device)
                 self.task.query('serialNumber', [device.ecid])
             else:
@@ -1024,6 +1047,7 @@ class DeviceManager(object):
                 _erasetask.append(device.ecid)
                 self.log.debug(" ... skipping additional verification")
                 device.verified = False
+                # skip additional verification checks
                 continue
             else:
                 self.log.debug("%s: erase verified!", device)
@@ -1031,10 +1055,13 @@ class DeviceManager(object):
                 
             # verify device supervision
             if not device.supervised:
-                device.verified = False
-                _enrolltask = retask.setdefault('prepare', [])
-                _enrolltask.append(device.ecid)
-                self.log.error("%s: supervision failed...", device)
+                if os.path.exists(self.resources.wifi):
+                    _verified = False
+                    _enrolltask = retask.setdefault('prepare', [])
+                    _enrolltask.append(device.ecid)
+                    self.log.error("%s: supervision failed...", device)
+                else:
+                    self.log.info("unable to supervise devices")
             else:
                 self.log.debug("%s: supervision verified!", device)
             self.log.debug("%s: verified == %s", device, _verified)
@@ -1071,14 +1098,15 @@ class DeviceManager(object):
                 device.checkout = now
             unavailable.append(device)
         
-        self.task.remove(unavailable.ecids)
+        skipped_ecids = unavailable.ecids + self.ignored()
+        self.task.remove(skipped_ecids)
 
         # Re-Task Devices
         _verified = True
         self.log.debug("retasking: %r", retask)
         for name, ecids in retask.items():
             # if any tasks have to be added then verification failed
-            retasked = set(ecids).difference(unavailable.ecids)
+            retasked = set(ecids).difference(skipped_ecids)
             self.log.debug("retasked: %r", retasked)
             if retasked:
                 _verified = False
