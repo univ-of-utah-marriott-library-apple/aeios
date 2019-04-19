@@ -2,12 +2,15 @@
 
 import os
 import re
+import sys
 import shutil
 import logging
+import logging.config
 import argparse
 import subprocess
 
 from . import resources
+from . import config
 
 """
 Utility functions for aeios
@@ -17,10 +20,47 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.3"
+__version__ = "2.0.0"
 
 # suppress "No handlers could be found" message
 logging.getLogger(__name__).addHandler(logging.NullHandler())
+
+SCRIPT = os.path.basename(__file__)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '%(name)s: %(funcName)s: %(message)s'
+        },
+        'precise': {
+            'format': ('%(asctime)s %(process)d: %(levelname)8s: %(name)s '
+                       '- %(funcName)s(): line:%(lineno)d: %(message)s')
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+            'stream': 'ext://sys.stderr'
+        },
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'formatter': 'precise',
+            'when': 'midnight',
+            'encoding': 'utf8',
+            'backupCount': 5,
+            'filename': None,
+        },
+    },
+    'root': {
+        'level': 'DEBUG',
+        'handlers': ["file", "console"]
+    }
+}
 
 
 class Error(Exception):
@@ -47,15 +87,30 @@ class Parser(object):
         self.subparsers = self.parser.add_subparsers(title='COMMANDS', 
                                                      dest='cmd', 
                                                      description=desc)
+        # aeiosutil start [--login]
+        # Namespace(cmd='start', login=False)
+        start = self.subparsers.add_parser('start', help='start automation',
+                                          description="start automation")
+        start.add_argument('--login', action='store_false', default=None,
+                           help='enable auto-starting at login')
+
+        # aeiosutil stop [--login]
+        # Namespace(cmd='stop', login=False)
+        stop = self.subparsers.add_parser('stop', help='stop automation',
+                                          description="stop automation")
+        stop.add_argument('--login', action='store_true', default=None,
+                          help='disable auto-starting at login')
+                                          
         self.add()
         self.remove()
+        self.reset()
         # self.info()
         # self.list()
         self.configure()
 
     def add(self):
         """
-        add parsers for `aeioutil add`
+        add parsers for `aeiosutil add`
             app APP
             identity (--p12 | --certs) PATH
             image (--background | --alert | --lock ) PATH
@@ -68,7 +123,7 @@ class Parser(object):
         desc = 'see `%(prog)s ITEM --help` for more information'
         sp = p.add_subparsers(title='ITEMS', dest='item', description=desc)
 
-        # aeioutil add app APP
+        # aeiosutil add app APP
         # Namespace(cmd='add', item='app', name=<NAME>)
         app = sp.add_parser('app', help='add apps', 
                             description='automate app installation')
@@ -130,7 +185,7 @@ class Parser(object):
 
     def remove(self):
         """
-        Add parsers for aeioutil remove
+        Add parsers for `remove` subcommand
             app NAME
             identity
             image (--background | --lock | --alert)
@@ -142,7 +197,7 @@ class Parser(object):
         desc = 'see `%(prog)s ITEM --help` for more information'
         sp = p.add_subparsers(title='ITEMS', dest='item', description=desc)
         
-        # aeioutil remove app APP
+        # aeiosutil remove app APP
         # Namespace(cmd='remove', item='app', name=<NAME>)
         app = sp.add_parser('app', help='remove apps',
                             description='remove apps from automation')
@@ -150,12 +205,12 @@ class Parser(object):
         app.add_argument('name', metavar='APP', 
                          help='iTunes name of APP (as seen in VPP)')
 
-        # aeioutil remove identity
+        # aeiosutil remove identity
         # Namespace(cmd='remove', item='identity')
         _id = sp.add_parser('identity', help='remove supervision identity',
                             description='remove supervision identity files')
 
-        # aeioutil remove image (--background | --alert | --lock | --all)
+        # aeiosutil remove image (--background | --alert | --lock | --all)
         # Namespace(cmd='remove', item='image', image=<background|alert|lock>)
         img = sp.add_parser('image', help='remove images',
                             description='remove images from aeios')
@@ -173,12 +228,12 @@ class Parser(object):
                                dest='image', const='all',
                                help='remove all images')
 
-        # aeioutil remove wifi
+        # aeiosutil remove wifi
         # Namespace(cmd='remove', item='wifi')
         wifi = sp.add_parser('wifi',  help='remove Wi-Fi profile',
                              description='Wi-Fi profile for DEP enrollment')
 
-        # aeioutil remove reporting
+        # aeiosutil remove reporting
         # Namespace(cmd='remove', item='reporting')
         report = sp.add_parser('reporting', help='reset reporting',
                                description='Configuration for reporting')
@@ -197,7 +252,7 @@ class Parser(object):
         desc = 'see `%(prog)s ITEM --help` for more information'
         sp = p.add_subparsers(title='ITEMS', dest='item', description=desc)
 
-        # aeioutil configure slack [--name NAME] URL CHANNEL
+        # aeiosutil configure slack [--name NAME] URL CHANNEL
         # Namespace(cmd='configure', item='slack', URL=<URL>, 
         #           channel=<CHANNEL>, name=<aeios|NAME>)
         slack = sp.add_parser('slack', help='configure slack', 
@@ -208,12 +263,30 @@ class Parser(object):
         slack.add_argument('--name', default='aeios',
                            help='name of the reporter')
 
-        # aeioutil configure idle SECONDS
+        # aeiosutil configure idle SECONDS
         # Namespace(cmd='configure', item='idle', seconds=<SECONDS>)
         idle = sp.add_parser('idle', help='configure idle timer', 
                               description='configure time between idle runs')
         idle.add_argument('seconds', metavar='SECONDS',
                           help='time (in seconds) between idle run')
+        
+    def reset(self):
+        # reset [--force]
+        desc = "reset various components of aeios"
+        p = self.subparsers.add_parser('reset', help='reset aeios',
+                                       description=desc)
+        desc = 'see `%(prog)s ITEM --help` for more information'
+        sp = p.add_subparsers(title='ITEMS', dest='item', description=desc)
+
+        # aeiosutil reset ignored
+        # Namespace(cmd='reset', item='ignored')
+        ignored = sp.add_parser('ignored', help='reset ignored devices', 
+                                description='reset ignored devices')
+
+        # aeiosutil reset ignored
+        # Namespace(cmd='reset', item='tasks')
+        tasks = sp.add_parser('tasks', help='reset queued tasks', 
+                              description='reset queued tasks')
         
     def parse(self, argv):
         """
@@ -224,7 +297,50 @@ class Parser(object):
 
 
 # FUNCTIONS
+def launchagent(disabled=None):
+    '''
+    takes enabled and modifies key, based on value
+    creates LaunchAgent (if it doesn't already exist)
+    :return: full path
+    
+    '''
+    logger = logging.getLogger(__name__)
+    label = resources.DOMAIN + '.aeios'
+    useragents = os.path.expanduser('~/Library/LaunchAgents')
+    conf = config.Manager(label, path=useragents)
 
+    # create (if missing)
+    if not os.path.exists(conf.file):
+        default = {'Disabled': True if disabled is None else disabled,
+                   'LimitLoadToSessionType': ['Aqua'],
+                   'KeepAlive': True,
+                   'Label': label,
+                   # 'Program': '/usr/local/bin/aeiosutil',
+                   # 'ProgramArguments': ['aeiosutil', 'daemon']}
+                   'Program': '/usr/local/bin/checkout_ipads.py',
+                   'ProgramArguments': ['checkout_ipads.py']}
+        logger.debug("writing defaults: %r", default)
+        conf.write(default)
+    elif disabled is not None:
+        data = {'Disabled': disabled}
+        logger.debug("updating LaunchAgent: %r", data)
+        conf.update(data)
+
+    return conf.file
+
+
+def start(onlogin):
+    logger = logging.getLogger(__name__)
+    cmd = ['launchctl', 'load', '-F', launchagent(disabled=onlogin)]
+    subprocess.check_call(cmd, stdout=subprocess.PIPE)
+
+
+def stop(onlogin):
+    logger = logging.getLogger(__name__)
+    cmd = ['launchctl', 'unload', '-F', launchagent(disabled=onlogin)]
+    subprocess.check_call(cmd, stdout=subprocess.PIPE)
+    
+    
 def add_item(path, dir, name=None):
     logger = logging.getLogger(__name__)
     if not name:
@@ -385,5 +501,101 @@ def extract(p12, outfile, passwd, args, tool):
     return outfile
 
 
+def run():
+    """
+    Attempt at script level recursion and daemonization
+    Benefits, would reduce the number of launchagents and the 
+    Accessiblity access
+    """
+    logger = logging.getLogger(SCRIPT)
+    logger.info("starting automation")
+    manager = aeios.DeviceManager()
+    # start up cfgutil exec with this script as the attach and detach
+    # scriptpath 
+    # FUTURE: controller.monitor()
+    cmd = ['/usr/local/bin/cfgutil', 'exec', 
+             '-a', "{0} attached".format(sys.argv[0]),
+             '-d', "{0} detached".format(sys.argv[0])]
+    try:
+        logger.debug("> %s", " ".join(cmd))
+        p = subprocess.Popen(cmd, stderr=subprocess.PIPE)
+    except OSError as e:
+        if e.errno == 2:
+            err = 'cfgutil missing... install automation tools'
+            logger.error(err)
+            raise SystemExit(err)
+        logger.critical("unable to run command: %s", e, exc_info=True)
+        raise
+        
+    if p.poll() is not None:
+        err = "{0}".format(p.communicate()[1]).rstrip()
+        logger.error(err)
+        raise SystemExit(err)
+
+    sig = SignalTrap(logger)
+    while not sig.stopped:
+        time.sleep(manager.idle)
+        if sig.stopped:
+            break
+        ## restart the cfgtuil command if it isn't running
+        if p.poll() is not None:
+            p = subprocess.Popen[cmd]
+        ## As long as the manager isn't stopped, run the verification
+        if not manager.stopped:
+            try:
+                logger.debug("running idle verification")
+                manager.verify(run=True)
+                logger.debug("idle verification finished")
+            except aeios.Stopped:
+                logger.info("manager was stopped")
+            except Exception as e:
+                logger.exception("unexpected error occurred")
+    # terminate the cfutil command
+    p.kill()
+    logger.info("finished")
+
+
+def main():
+    
+    # This might lead to some slightly insane recursion, 
+    # assuming it works at all
+    resource = resources.Resources()
+    logfile = os.path.join(resource.logs, "aeiosutil.log")
+    LOGGING['handlers']['file']['filename'] = logfile
+    logging.config.dictConfig(LOGGING)
+    logger = logging.getLogger(SCRIPT)
+    
+    logger.debug("started")
+    
+    logger.debug("loading DeviceManager")
+    manager = aeios.DeviceManager()
+
+    try:
+        action = sys.argv[1]
+    except IndexError:
+        run(manager)
+        sys.exit(0)
+    
+    # get the iOS Device environment variables set by `cfgutil exec`
+    env_keys = ['ECID', 'deviceName', 'bootedState', 'deviceType',
+                'UDID', 'buildVersion', 'firmwareVersion', 'locationID']
+    info = {k:os.environ.get(k) for k in env_keys}
+    
+    logger.debug("performing action: %s", action)
+    
+    if action == 'attached':
+        manager.checkin(info)
+    elif action == 'detached':
+        manager.checkout(info)
+    elif action == 'refresh':
+        manager.verify()
+    else:
+        err = "invalid action: {0}".format(action)
+        logger.error(err)
+        raise SystemExit(err)
+
+
+
 if __name__ == '__main__':
     pass
+    # main()

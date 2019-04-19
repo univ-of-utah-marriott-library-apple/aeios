@@ -16,7 +16,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.6"
+__version__ = "1.1.0"
 
 # name of this script
 SCRIPT = os.path.basename(sys.argv[0])
@@ -162,6 +162,10 @@ def main(argv):
         remove(resources, args)
     elif args.cmd == 'configure':
         configure(resources, args)
+    elif args.cmd == 'start':
+        aeios.utility.start(args.login)
+    elif args.cmd == 'stop':
+        aeios.utility.stop(args.login)
 
 
 if __name__ == '__main__':
