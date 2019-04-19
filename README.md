@@ -13,42 +13,56 @@ Our iPads can be (and often are) used as if they were personal devices. Users ca
 By integrating the best features of Apple’s “Apple Configurator 2”, DEP, and MDM. We have created a completely automated, and *Truly Zero-Touch* solution for iOS device checkout using free and native Apple macOS solutions.
 
 Now it’s time to share :)
+
 # Setup
 
-Basic: Erase & MDM/DEP Re-enrollment (no Apps)
-    1. Install Apple Configurator 2 > Automation Tools...
-    2. Add Wi-Fi Profile:
-        `$ aeiosutil add wifi </path/to/wifi.mobileconfig>`
+## Basic
+
+Automatically Erase & Re-Supervise Devices (no Apps)
+    1. Install Apple Configurator 2
+    2. Install Apple Configurator 2's Automation Tools
+    3. (Add Wi-Fi Profile)[#Wi-Fi]
 
 
-VPP Apps:
+## Installing Applications
+
+All iOS app installation is done using [Apple Configurator 2](https://support.apple.com/apple-configurator)
 
 Apple Configurator 2
 
-    1. View > List > Add UDID and ECID column (sort by ECID)
-    2. Sign into VPP account
-    Optional:
-    Apple Configurator 2 Preferences... Organizations > Add Organization
+    1. View > List > Add UDID column
+    2. Sign into your VPP account
+    3. [Specify apps](#adding-apps) to install
 
 
-Background:
-    `$ aeiosutil add image --background </path/to/image>`
+### Wi-Fi
 
-Reporting:
-    `$ aeiosutil configure slack URL CHANNEL`
+### Custom Backgrounds
+
+```bash
+$ aeiosutil add image --background </path/to/image>`
+```
+
+### Reporting
+
+Specify Wi-Fi mobile configuration profile to use for DEP Re-enrollment
+```bash
+$ aeiosutil configure slack "https://" CHANNEL
+```
 
 
----
 ## Workflow
 
-aeiOS essentially performs 5 tasks:
+aeiOS essentially performs 6 tasks:
 
     1. Erase
     2. Re-Enroll via DEP
     3. Install VPP Apps (optional)
     4. Customization (optional)
     5. Verification
-    
+    6. Load Balancing
+
+ 
 ### Erasing Devices
 
 When an iOS device is connected for the first time to a system running `aeiOS`, you will be given following choice, either:
@@ -62,7 +76,7 @@ Currently, Ignore and Erase are not configurable apart from this first prompt. (
 
 If you select "Cancel", you'll be re-prompted each time this device connects until another choice is made. 
 
-If you selected "Erase" incorrectly, it cannot be undone... ¯\_(ツ)_/¯
+If you selected "Erase" incorrectly, it cannot be undone... ¯\\\_(ツ)_/¯
 
 However, if you've accidentally ignored a device you want automated you can always reset aeiOS to a default state (see "Troubleshooting")
 
@@ -112,45 +126,92 @@ I've integrated some blanket fault tolerance for the most common issues. (Intern
 
 I'll be improving this portion as well as development continues.
 
-#### Adding Apps
 
-Apps have to be added to automation via their iTunes Name (as it appears in Apple Configurator 2 under the "Name" column) and can be done via the command:
+
+## Configuration
+
+Because device automation is institutionally specific, `aeiOS` will need some configuration performed before automation will work and comes with a tool designed for just that purpose: `aeiosutil`
+
+General configuration will go something along the lines of this:
+
+```bash
+$ aeiosutil add wifi </path/to/wifi.mobileconfig>
+$ aeiosutil add identity --p12 </path/to/supervision.p12>
+$ aeiosutil add image --background </path/to/background.png>
+$ aeiosutil configure slack "https://slack.webhook" "#aeios-channel"
+$ aeiosutil add app "Microsoft Word"
+$ aeiosutil add app "Google Docs: Sync, Share, Edit"
+```
+
+Most configuration will be a one-time process, but as you need to update various parts (automate new apps/remove old apps, new backgrounds, different wifi, etc.) `aeiosutil` will be your go-to tool.
+
+### Running Automation
+
+```bash
+$ aeiosutil start [--login]
+$ aeiosutil stop [--login]
+```
+
+
+### Usage
+
+Each sub-command for `aeiosutil` has it's own help page, as well as most of the arguments themselves.
+
+All of these commands display different help pages:
+```bash
+$ aeiosutil --help
+$ aeiosutil add --help
+$ aeiosutil add identity --help
+```
+
+### Configuring Apps
 
 ```bash
 $ aeiosutil add app "Microsoft Word"
+$ aeiosutil add app "Google Docs: Sync, Share, Edit"
 ```
 
-Be sure you have enough licenses for all of your devices before adding an app to the automation, I'm not sure exactly how it will be handled.
+The name has to be added *exactly* as it appears in Apple Configurator. Be sure you have enough licenses for all of your devices.
 
-
-### Customization
-
-#### Backgrounds
-
-Custom backgrounds can only be set on supervised devices and need the correct supervision identity to be modified. Export your MDM's existing supervision identity (either directly from the MDM, or from Apple Configurator 2). Once exported it can be added to `aeiOS` via `aeiosutil` with either of the following commands
+Apps can be removed with `aeiosutil remove`:
 
 ```bash
-$ aeiosutil add identity --p12 /path/to/supervision_identity.p12
+$ aeiosutil remove app "Microsoft Word"
 ```
 
-Or, if you export your supervision identity via Apple Configurator 2
+Apps have to be added to automation via their iTunes Name (as it appears in Apple Configurator 2 under the "Name" column), and has some [dependencies](#vpp-app-installation), but as long as Apple Configurator 2 has the UDID column, is setup with a VPP account and has enough licences for all your automated devices, you shouldn't have many issues.
 
 ```bash
-$ aeiosutil add identity --certs /path/to/exported/certs/directory
+$ aeiosutil add app --help
+$ aeiosutil remove app --help
 ```
 
-Your customized background can be added with the following:
+### Custom Backgrounds
+
+Custom device wallpapers can be added via:
 
 ```bash
 $ aeiosutil add image --background /path/to/image
 ```
 
-The order of these commands doesn't matter.
-
-More customization will be included in future releases
+Setting the background requires the device to be supervised and an imported [supervision identity](#supervision-identity)
 
 
-## Reporting
+### Supervision Identity
+
+Some automation requires access to the supervision identity. You can export your MDM's existing supervision identity (either directly from the MDM, or [via Apple Configurator](https://support.apple.com/en-us/HT207434)). Once exported it can be added to `aeiOS` via `aeiosutil` with either of the following commands.
+
+```bash
+$ aeiosutil add identity --p12 /path/to/supervision_identity.p12
+```
+
+You can import your unencrypted supervision identity with:
+```bash
+$ aeiosutil add identity --certs /path/to/exported/certs/directory
+```
+
+
+### Reporting
 
 In order to keep your library of apps up-to-date and relevant, any apps installed on devices that aren't automatically installed (or known by) `aeiOS` will be reported as they are encountered 
 Reporting is handled via Slack Webhook {site} and can be configured:
@@ -161,41 +222,16 @@ $ aeiosutil configure slack https://slack.webhook.url '#channel-name'
 
 Additionally, critical errors to the automation that require attention will also be reported.
 
-## Configuration:
 
-Most configuration is done with `/usr/local/bin/aeiosutil` (see `aeiosutil --help` for more information).
+### Future
 
-General configuration will go something along the lines of this:
+More customization and configuration options are planned for the future, but aren't yet ready for this release.
 
-```bash
-$ aeiosutil add wifi </path/to/wifi.mobileconfig>
-$ aeiosutil add identity --p12 </path/to/supervision.p12>
-$ aeiosutil add image --background </path/to/background.png>
-$ aeiosutil configure slack "https://slack.webhook" "#aeios-channel"
-$ aeiosutil add app "Microsoft Word"
-$ aeiosutil add app "Microsoft Excel"
-$ aeiosutil add app "Microsoft PowerPoint"
-```
 
-And as long as Apple Configurator 2 has the UDID column and is setup with a VPP account with enough licences for all of the devices. You're done!
-
-Single apps can be removed from automation with the following:
-
-```bash
-$ aeiosutil remove app "Microsoft Word"
-```
-
-Each sub-command for `aeiosutil` has it's own help page, and most arguments for each sub-command do as well.
-
-```bash
-$ aeiosutil --help
-$ aeiosutil add --help
-$ aeiosutil add app --help
-```
 
 ## CAVEATS
 
-### Load balancing
+### Load Balancing
 
 A single system tends to get overloaded around 9-10 iOS devices, this causes the USB bus to start acting oddly and can cause devices to randomly disconnect in the middle of automation or keep devices from connecting to the system at all.
 
@@ -212,9 +248,9 @@ Checking device supervision *is* one of the hard-coded verification step in `aei
 
 Although, Erase and App installation will still take place if a device supervision fail, unsupervised devices will never be "verified", so load-balancing will not take place. 
 
-This will be addressed in a future release
+This may be addressed in a future release.
 
----
+
 ## Troubleshooting
 
 `aeiOS` is designed to work from scratch, so all `.plist` files located in `~/Library/aeios` can be safely deleted, but you might lose some configuration
@@ -222,12 +258,27 @@ This will be addressed in a future release
 If you ever need to simply "reset" `aeiOS`, you can safely run the following command without deleting any existing configuration:
 
 ```bash
-$ find ~/Library/aeios -name "*.plist" -not -name "*apps.plist" -exec rm
+$ find ~/Library/aeios -name "*.plist" -not -name "*apps.plist" -delete
 ```
 
-NOTE: Don't rely on this one-liner in future releases, but until I flush out `aeiosutil`, it's currently the least damaging way to simply clear everything and start fresh.
+NOTE: Don't rely on this one-liner in future releases, but I add the functionality to `aeiosutil`, it's the de-facto, non-destructive way clear everything and start fresh.
 
 This will also delete all iOS device records, as well as ignored devices, so each device will re-prompt the next time it reconnects to the system and any device that is currently connected to the system will be re-erased.
 
 Additional preferences can be found in: `~/Library/Preferences/edu.utah.mlib.aeios.plist`
 
+
+## Contact
+
+Issues/bugs can be reported [here](../../issues).
+
+If you have any questions or comments, feel free to [email us](mailto:mlib-its-mac-github@lists.utah.edu).
+
+Thanks!
+
+
+## Update History
+
+| Date       | Version | Description
+|------------|:-------:|------------------------------------------------------|
+| 2019-04-19 | 1.0.0   | Initial Release
