@@ -12,7 +12,7 @@ __author__ = 'Sam Forester'
 __email__ = 'sam.forester@utah.edu'
 __copyright__ = 'Copyright (c) 2019 University of Utah, Marriott Library'
 __license__ = 'MIT'
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __all__ = ['Button', 'Prompt', 'Cancelled', 'confirm', 'ignore', 'automation']
 
 # suppress "No handlers could be found" message
@@ -135,10 +135,10 @@ def confirm(device):
     logger = logging.getLogger(__name__)
     logger.debug("started: %s", device)
         
-    message = u"Are you sure you want to erase “{0!s}”?".format(device)
-    details = ('This device will be automatically erased each time it'
-               ' is connected to this system.\n\n'
-               'This cannot be undone.')
+    message = "Are you sure you want to erase this device?"
+    details = (u'“{0!s}” will be automatically erased each time it'
+               u' is connected to this computer.\n\n'
+               u'This cannot be undone.'.format(device))
     buttons = (Button("Cancel", default=True), Button("Erase"))
 
     prompt = Prompt(message, details, buttons)
