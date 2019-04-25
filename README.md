@@ -216,19 +216,16 @@ If you select "Cancel", you'll be re-prompted each time this device connects unt
 If you've accidentally ignored a device you want automated you can always reset AEiOS to a default state (see [Troubleshooting](#troubleshooting))
 
 
-### WARNING 
+### WARNING - THIS SOFTWARE IS DESIGNED TO AUTOMATICALLY ERASE iOS DEVICES!!
 
-#### THIS SOFTWARE IS DESIGNED TO AUTOMATICALLY ERASE iOS DEVICES!!
+`AEiOS` will erase any iOS devices (including iPhones) that been instructed to [Trust This Computer](https://support.apple.com/en-us/HT202778).
 
-`AEiOS` will erase any iOS devices (including iPhones) that [Trust This Computer](https://support.apple.com/en-us/HT202778).
+While efforts have been made to limit automation to explicitly specified devices. You may find an edge-case and accidentally erase a device erroneously. **Be sure to test your setup thoroughly**... Please don't use a computer with `AEiOS` installed to charge your phone... 
 
-While efforts have been made to only erase explicitly specified devices. You may find an edge-case that incorrectly erases a device. 
+Bugs submitted regarding an "Accidental Erase" will be redirected [here](https://i.imgur.com/HB9eUe4.png).
 
-Please don't use a system with `AEiOS` installed to charge your phone...
+*You've been warned...*
 
-Bugs submitted regarding "Accidental Device Reset" will be redirected [here](https://i.imgur.com/HB9eUe4.png).
-
-#### YOU'VE BEEN WARNED...
 
 ## Device Supervision
 
@@ -366,4 +363,4 @@ Thanks!
 
 | Date       | Version | Description
 |------------|:-------:|------------------------------------------------------|
-| 2019-04-24 | 1.0.0   | Initial Release                                      
+| 2019-04-25 | 1.0.0   | Initial Release                                      
