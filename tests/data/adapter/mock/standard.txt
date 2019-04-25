@@ -1,0 +1,114 @@
+{"activity":null,"alerts":[],"busy":false}
+{"activity":{"options":[],"info":["Step 2 of 27: Assigning licenses for “Microsoft Excel”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 3 of 27: Assigning licenses for “Microsoft PowerPoint”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 3 of 27: Assigning licenses for “Microsoft PowerPoint”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 5 of 27: Assigning licenses for “Microsoft Teams”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 5 of 27: Assigning licenses for “Microsoft Teams”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 6 of 27: Assigning licenses for “Microsoft Word”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 7 of 27: Assigning licenses for “Parallels Client”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 8 of 27: Assigning licenses for “Slack”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 8 of 27: Assigning licenses for “Slack”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 8 of 27: Assigning licenses for “Slack”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 8 of 27: Assigning licenses for “Slack”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 8 of 27: Assigning licenses for “Slack”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 9 of 27: Downloading apps","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 11 of 27: Transferring placeholder for “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 18 of 27: Transferring placeholder for “Slack”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 19 of 27: Transferring “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 19 of 27: Transferring “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 19 of 27: Transferring “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 19 of 27: Transferring “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 19 of 27: Transferring “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 19 of 27: Transferring “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 19 of 27: Transferring “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 19 of 27: Transferring “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 19 of 27: Transferring “ReCap Pro”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 20 of 27: Transferring “Excel”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 20 of 27: Transferring “Excel”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 20 of 27: Transferring “Excel”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 20 of 27: Transferring “Excel”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 20 of 27: Transferring “Excel”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 20 of 27: Transferring “Excel”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 21 of 27: Transferring “PowerPoint”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 21 of 27: Transferring “PowerPoint”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 21 of 27: Transferring “PowerPoint”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 21 of 27: Transferring “PowerPoint”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 21 of 27: Transferring “PowerPoint”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 21 of 27: Transferring “PowerPoint”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 21 of 27: Transferring “PowerPoint”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 23 of 27: Transferring “Teams”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 23 of 27: Transferring “Teams”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 24 of 27: Transferring “Word”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 24 of 27: Transferring “Word”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 24 of 27: Transferring “Word”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 24 of 27: Transferring “Word”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 24 of 27: Transferring “Word”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 24 of 27: Transferring “Word”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 25 of 27: Transferring “Client”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 25 of 27: Transferring “Client”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 26 of 27: Transferring “Slack”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 26 of 27: Transferring “Slack”","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":{"options":[],"info":["Step 27 of 27: Waiting for device to complete transfer","Adding apps on 4 iPads"],"choices":["Cancel"]},"alerts":[],"busy":true}
+{"activity":null,"alerts":[],"busy":false}

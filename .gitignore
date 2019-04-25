@@ -1,0 +1,12 @@
+*.DS_Store
+
+*.py[cod]
+*~
+
+*.egg-info/
+*.egg
+
+*.log
+*log/
+*private/
+
