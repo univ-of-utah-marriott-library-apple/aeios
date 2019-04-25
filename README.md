@@ -1,6 +1,6 @@
 # AEiOS (Automated Enterprise iOS)
 
-AEiOS is a python library designed to aid the automation of Apple *iOS* device management, configuration, and imaging. Originally designed for our in-house Student Checkout iPads, we wanted to provide our students and patrons the ability to use our iPads without restrictions as if they were personal devices. Users can configure the devices however they like, install their own applications, and even use iCloud, while we (MacAdmins) maintain user data privacy between each checkout. 
+*AEiOS* is a python library designed to aid the automation of Apple *iOS* device management, configuration, and imaging. Originally designed for our in-house Student Checkout iPads, we wanted to provide our students and patrons the ability to use our iPads without restrictions as if they were personal devices. Users can configure the devices however they like, install their own applications, and even use iCloud, while we (MacAdmins) maintain user data privacy between each checkout. 
 
 By integrating the best features of Apple's **Apple Configurator**, **Device Enrollment Program** (DEP), **Mobile Device Management** (MDM) and **Volume Purchase Program** (VPP). We have created a completely automated, and truly zero-touch solution for *iOS* device checkout using free and native Apple *macOS* solutions that requires no interaction by our very busy support staff other than plugging in with checkin.
 
@@ -190,7 +190,7 @@ $ aeiosutil stop --login
 
 # Under The Hood
 
-AEiOS essentially performs 6 tasks:
+*AEiOS* essentially performs 6 tasks:
 
     1. Erase
     2. Re-Enroll via DEP
@@ -213,7 +213,7 @@ Currently, the "Ignore" and "Erase" options are not configurable apart from this
 
 If you select "Cancel", you'll be re-prompted each time this device connects until another choice is made. 
 
-If you've accidentally ignored a device you want automated you can always reset AEiOS to a default state (see [Troubleshooting](#troubleshooting))
+If you've accidentally ignored a device you want automated you can always reset *AEiOS* to a default state (see [Troubleshooting](#troubleshooting))
 
 
 ### WARNING - THIS SOFTWARE IS DESIGNED TO AUTOMATICALLY ERASE iOS DEVICES!!
@@ -250,7 +250,7 @@ With known exploits, Apple is particularly sensitive about granting Accessibilit
 
 I have figured out a way to circumvent giving Accessibility Access to `/bin/sh`, but it is going to require some significant refactoring, and will not be included in the initial release.
 
-In this version of *AEiOS*, `checkout_ipads.py` and `sh` will *BOTH* need to be given Accessibility Access for VPP App installation to work. If that's considered too great of an insecurity, VPP App Installation does not need to be implemented via *AEiOS* and you can install apps via other, institutionally applicable mechanisms.
+In this version of *AEiOS*, `checkout_ipads.py` and `/bin/sh` will *BOTH* need to be given Accessibility Access for VPP App installation to work. If that's considered too great of an insecurity, VPP App Installation does not need to be implemented via *AEiOS* and you can install apps via other, institutionally applicable mechanisms.
 
 Securing Accessibility Access requirements is my top-most priority, and will be addressed before additional features are released.
 
