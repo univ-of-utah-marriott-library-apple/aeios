@@ -1,23 +1,48 @@
 # AEiOS (Automated Enterprise iOS)
 
-A python library designed to aid the automation of Apple iOS device management, configuration and imaging.
+AEiOS is a python library designed to aid the automation of Apple iOS device management, configuration, and imaging. Originally designed for our in-house Student Checkout iPads, we wanted to provide our students and patrons the ability to use our iPads without restrictions as if they were personal devices. Users can configure the devices however they like, install their own applications, and even use iCloud, while we (MacAdmins) maintain user data privacy between each checkout. 
 
-# Goal
-Specifically designed for our in-house *Student Checkout iPads*, we wanted to provide our students and patrons the ability to use our iPads *without restrictions*.
+By integrating the best features of Apple's "Apple Configurator 2", Device Enrollment Program (DEP), and Mobile Device Management (MDM). We have created a completely automated, and truly zero-touch solution for iOS device checkout using free and native Apple macOS solutions that requires no interaction by our very busy support staff other than plugging in with checkin.
 
-Our iPads can be (and often are) used as if they were personal devices. Users can configure the devices however they like, install their own applications, and even use iCloud, while also maintaining *User Data Privacy* between each checkout.
+# Contents
+
+* [Download](#download)
+* [Setup and Configuration](#setup-and-configuration)
+  * [System Requirements](#system-requirements)
+  * [General Configuration](#configuration)
+    * [Usage](#configuration)
+    * [Wi-Fi Profile](#wi-fi-profile)
+    * [Supervision Identity](#supervision-identity)
+    * [Custom Backgrounds](#custom-backgrounds)
+    * [Reporting](#reporting)
+  * [Application Installation](#automating-application-installation)
+    * [Configuration](#automating-application-installation)
+  * [Running Automation](#running-automation)
+* [How it Works](#under-the-hood)
+  * [Reset](#erasing-devices)
+  * [Supervision](#device-supervision)
+  * [App Installation](#vpp-app-installation)
+  * [Verification](#verification)
+  * [Load Balancing](#load-balancing)
+* [Caveats](#caveats)
+  * [GUI Device Identification](#erasing-devices)
+  * [Unsupervised Devices](#erasing-devices)
+* [Troubleshooting](#troubleshooting)
+* [Uninstallation](#uninstallation)
+  * [Supporting Files](#files)
+* [Contact](#contact)
+* [Update History](#update-history)
 
 
-By integrating the best features of Apple's "Apple Configurator 2", Device Enrollment Program (DEP), and Mobile Device Management (MDM). We have created a completely automated, and **truly** zero-touch solution for iOS device checkout using free and native Apple macOS solutions.
+# Download
 
-Now it’s time to share :)
+The latest release is available for download [here](../../releases). Uninstallation instructions are provided [below](#uninstallation). 
 
----
 
 # Setup and Configuration
 
 
-### First Steps
+### System Requirements
 
 Make sure you have [Apple Configurator 2](https://itunes.apple.com/us/app/apple-configurator-2/id1037126344) installed as well as its [automation tools](https://support.apple.com/guide/apple-configurator-2/command-line-tool-installation-cad856a8ea58). `AEiOS` will not be able to perform any tasks without these tools installed.
 
@@ -188,12 +213,22 @@ Currently, the "Ignore" and "Erase" options are not configurable apart from this
 
 If you select "Cancel", you'll be re-prompted each time this device connects until another choice is made. 
 
-### WARNING
+If you've accidentally ignored a device you want automated you can always reset AEiOS to a default state (see [Troubleshooting](#troubleshooting))
 
-If you selected "Erase" incorrectly, and it erases a device, it cannot be undone... ¯\\\_(ツ)_/¯
 
-However, if you've accidentally ignored a device you want automated you can always reset AEiOS to a default state (see [Troubleshooting](#troubleshooting))
+### WARNING 
 
+#### THIS SOFTWARE IS DESIGNED TO AUTOMATICALLY ERASE iOS DEVICES!!
+
+`AEiOS` will erase any iOS devices (including iPhones) that [Trust This Computer](https://support.apple.com/en-us/HT202778).
+
+While efforts have been made to only erase explicitly specified devices. You may find an edge-case that incorrectly erases a device. 
+
+Please don't use a system with `AEiOS` installed to charge your phone...
+
+Bugs submitted regarding "Accidental Device Reset" will be redirected [here](https://i.imgur.com/HB9eUe4.png).
+
+#### YOU'VE BEEN WARNED...
 
 ## Device Supervision
 
@@ -214,7 +249,7 @@ Because of inconsistencies with "Best Effort" MDM app installation, and instabil
 
 However, utilizing System Events comes with baggage... namely Accessibility Access. 
 
-With known exploits, Apple is particularly sensitive about granting Accessibility Access to anything that asks, but it's also not very consistant with how Accessibility Access is handled. As far as I can tell, any script executed by `cfgutil` (Apple's own automation tool) executes scripts directly from `/bin/sh`, which means it *needs* Accessibility Access in order for the GUI automation to work. Congratulations Apple! youplayedyourself.gif
+With known exploits, Apple is particularly sensitive about granting Accessibility Access to anything that asks, but it's also not very consistant with how Accessibility Access is handled. As far as I can tell, any script executed by `cfgutil` (Apple's own automation tool) executes scripts directly from `/bin/sh`, which means it *needs* Accessibility Access in order for the GUI automation to work.
 
 I have figured out a way to circumvent giving Accessibility Access to `/bin/sh`, but it is going to require some significant refactoring, and will not be included in the initial release.
 
@@ -233,7 +268,7 @@ I've integrated some blanket fault tolerance for the most common issues. (Intern
 I'll be improving app installation as development continues.
 
 
-### Verification
+## Verification
 
 Due to inherent uncertainty of a device's state (e.g. random disconnects, false checkouts, internal VPP errors, etc.) `AEiOS` has a lot of built-in fault tolerance. I'm constantly surprised how many errors are fixed simply by "trying again with fewer devices", so instead of failing on an error, it just moves along to the next step. 
 
@@ -242,7 +277,7 @@ After any given round of automation is completed, `AEiOS` verifies each device a
 Due to random intermittent issues with VPP App Installation. App verification is only performed 3 times and failure is reported ([if configured](#reporting)) after a 3rd unsuccessful attempt.
 
 
-### Load Balancing
+## Load Balancing
 
 A single system tends to get overloaded around 9-10 iOS devices, this causes the USB bus to start acting oddly and as a result, devices can randomly disconnect in the middle of automation, drop all connections when another device is reconnected, or keep devices from connecting to the system at all.
 
@@ -270,8 +305,6 @@ Device supervision *is* one of the hard-coded verification step in `AEiOS`, so i
 
 Although Erase and App installation will still take place if a device is left intentionally unsupervised, custom backgrounds are skipped, and load-balancing cannot take place.
 
-There also maybe issues with 
-
 This may be addressed in a future release.
 
 
@@ -292,9 +325,9 @@ $ aeiosutil start
 **WARNING**: This will also delete all iOS device records, as well as ignored devices, so each device will re-prompt the next time it reconnects to the system and any device that is currently connected to the system will be re-erased.
 
 
-## Uninstalling
+## Uninstallation
 
-`Uninstall AEiOS.app` is included with the installer, but can also be found in: `/Library/Python/2.7/site-packages/aeios/scripts`.
+`Uninstall AEiOS.app` is included with the installer, as well as: `/Library/Python/2.7/site-packages/aeios/scripts`.
 
 Alternatively, you can manually run the uninstall script with:
 ```bash
@@ -329,7 +362,7 @@ Issues/bugs can be reported [here](../../issues). If you have any questions or c
 Thanks!
 
 
-## Update History
+# Update History
 
 | Date       | Version | Description
 |------------|:-------:|------------------------------------------------------|
