@@ -6,7 +6,8 @@
 *.egg-info/
 *.egg
 
+*tmp/
 *.log
 *log/
 *private/
-
+scripts/aeiosutilc
